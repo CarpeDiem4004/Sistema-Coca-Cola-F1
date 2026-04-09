@@ -394,26 +394,22 @@ async function verDetalhe(id) {
 
   html += `<div class="table-responsive"><table class="table table-bordered table-sm align-middle">
     <thead><tr>
-      <th>Rota</th><th>Motorista</th><th>Ajudante</th><th>Saiu</th><th>Entregou</th><th>Devolveu</th>
-      <th>Vl.Recebido</th><th>Vl.Esperado</th><th>Faltando</th><th>Desconto</th><th>Vl.Desconto</th><th>Motivo</th><th>Obs</th>
+      <th>Rota</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th>
+      <th>Mercadorias Faltando</th><th>NF</th><th>Desconto</th><th>Vl.Desconto</th><th>Motivo/Obs</th>
     </tr></thead><tbody>`;
 
   for (const r of rel.rotas) {
-    const diff = r.valor_esperado - r.valor_recebido;
     html += `<tr class="${r.desconto_equipe ? 'table-warning' : ''}">
       <td><strong>${r.numero_rota}</strong></td>
+      <td>${r.numero_f1||'—'}</td>
       <td>${r.motorista_nome||'—'}</td>
       <td>${r.ajudante_nome||'—'}</td>
-      <td>${r.qtd_saiu}</td>
-      <td>${r.qtd_entregou}</td>
-      <td>${r.qtd_devolveu}</td>
-      <td>R$ ${(+r.valor_recebido).toFixed(2)}</td>
-      <td>R$ ${(+r.valor_esperado).toFixed(2)} ${diff > 0 ? `<span class="badge bg-danger ms-1">-R$${diff.toFixed(2)}</span>` : ''}</td>
+      <td>${r.ajudante2_nome||'—'}</td>
       <td>${r.mercadorias_faltando ? `<span class="text-danger">${r.mercadorias_faltando}</span>` : '—'}</td>
+      <td>${r.nf_url ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm"><i class="bi bi-paperclip"></i> Ver NF</a>` : '—'}</td>
       <td>${r.desconto_equipe ? '<span class="badge bg-danger">SIM</span>' : '<span class="badge bg-success">Não</span>'}</td>
       <td>${r.valor_desconto > 0 ? `<span class="text-danger fw-bold">R$ ${(+r.valor_desconto).toFixed(2)}</span>` : '—'}</td>
       <td>${r.motivo_desconto||'—'}</td>
-      <td>${r.observacoes||'—'}</td>
     </tr>`;
   }
   html += '</tbody></table></div>';

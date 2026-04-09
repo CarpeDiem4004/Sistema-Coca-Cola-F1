@@ -201,7 +201,7 @@ function renderFuncionarios() {
           </tr>`).join('');
   });
   // atualizar selects de rotas
-  document.querySelectorAll('.sel-motorista, .sel-ajudante').forEach(sel => {
+  document.querySelectorAll('.sel-motorista, .sel-ajudante, .sel-ajudante2').forEach(sel => {
     const tipo = sel.classList.contains('sel-motorista') ? 'motorista' : 'ajudante';
     const val  = sel.value;
     sel.innerHTML = `<option value="">— selecionar —</option>` +
@@ -250,49 +250,44 @@ function addRota() {
         <label class="form-label small fw-semibold">Nº da Rota *</label>
         <input type="text" class="form-control form-control-sm inp-rota" placeholder="Ex: R001" />
       </div>
-      <div class="col-md-3">
-        <label class="form-label small fw-semibold">Motorista</label>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">Nº da F1</label>
+        <input type="text" class="form-control form-control-sm inp-f1" placeholder="Ex: F001" />
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold"><i class="bi bi-truck me-1 text-danger"></i>Motorista</label>
         <select class="form-select form-select-sm sel-motorista">
           <option value="">— selecionar —</option>
           ${funcionarios.filter(f=>f.cargo==='motorista').map(f=>`<option value="${f.id}">${f.nome}</option>`).join('')}
         </select>
       </div>
       <div class="col-md-3">
-        <label class="form-label small fw-semibold">Ajudante</label>
+        <label class="form-label small fw-semibold"><i class="bi bi-person me-1 text-danger"></i>Ajudante 1</label>
         <select class="form-select form-select-sm sel-ajudante">
           <option value="">— selecionar —</option>
           ${funcionarios.filter(f=>f.cargo==='ajudante').map(f=>`<option value="${f.id}">${f.nome}</option>`).join('')}
         </select>
       </div>
-      <div class="col-md-1">
-        <label class="form-label small fw-semibold">Qtd Saiu</label>
-        <input type="number" class="form-control form-control-sm inp-saiu" min="0" value="0" />
-      </div>
-      <div class="col-md-1">
-        <label class="form-label small fw-semibold">Entregou</label>
-        <input type="number" class="form-control form-control-sm inp-entregou" min="0" value="0" />
-      </div>
-      <div class="col-md-1">
-        <label class="form-label small fw-semibold">Devolveu</label>
-        <input type="number" class="form-control form-control-sm inp-devolveu" min="0" value="0" />
-      </div>
-      <div class="col-md-1">
-        <label class="form-label small fw-semibold">Vl. Recebido</label>
-        <input type="number" class="form-control form-control-sm inp-recebido" min="0" step="0.01" value="0" />
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold"><i class="bi bi-person me-1 text-danger"></i>Ajudante 2</label>
+        <select class="form-select form-select-sm sel-ajudante2">
+          <option value="">— selecionar —</option>
+          ${funcionarios.filter(f=>f.cargo==='ajudante').map(f=>`<option value="${f.id}">${f.nome}</option>`).join('')}
+        </select>
       </div>
     </div>
     <div class="row g-2 mt-1">
-      <div class="col-md-1">
-        <label class="form-label small fw-semibold">Vl. Esperado</label>
-        <input type="number" class="form-control form-control-sm inp-esperado" min="0" step="0.01" value="0" />
-      </div>
       <div class="col-md-4">
         <label class="form-label small fw-semibold">Mercadorias Faltando</label>
         <input type="text" class="form-control form-control-sm inp-faltando" placeholder="Ex: 10cx Coca 2L, 5cx Fanta" />
       </div>
-      <div class="col-md-2">
-        <label class="form-label small fw-semibold">Motivo do Desconto</label>
-        <input type="text" class="form-control form-control-sm inp-motivo" placeholder="Descreva o motivo" />
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold"><i class="bi bi-paperclip me-1"></i>Anexar NF <span class="text-muted small">(PDF/Imagem)</span></label>
+        <div class="d-flex gap-1 align-items-center">
+          <input type="file" class="form-control form-control-sm inp-nf-file" accept=".pdf,.jpg,.jpeg,.png,.webp" />
+          <span class="inp-nf-status small"></span>
+        </div>
+        <input type="hidden" class="inp-nf-url" />
       </div>
       <div class="col-md-2 d-flex align-items-end">
         <div class="form-check">
@@ -302,11 +297,11 @@ function addRota() {
       </div>
       <div class="col-md-1">
         <label class="form-label small fw-semibold">Vl. Desconto</label>
-        <input type="number" class="form-control form-control-sm inp-valor-desconto" min="0" step="0.01" value="0" placeholder="R$ 0,00" />
+        <input type="number" class="form-control form-control-sm inp-valor-desconto" min="0" step="0.01" value="0" />
       </div>
       <div class="col-md-2">
-        <label class="form-label small fw-semibold">Observações</label>
-        <input type="text" class="form-control form-control-sm inp-obs" placeholder="Opcional" />
+        <label class="form-label small fw-semibold">Motivo / Observações</label>
+        <input type="text" class="form-control form-control-sm inp-motivo" placeholder="Descreva o motivo ou obs." />
       </div>
     </div>`;
   document.getElementById('listaRotas').appendChild(div);
@@ -338,24 +333,39 @@ async function enviarRelatorio() {
   const dataRef  = document.getElementById('dataRef').value;
   const cartoes  = document.querySelectorAll('.rota-card');
 
+  if (!dataRef) { mostrarAlerta(alerta, 'danger', 'Informe a data de referência.'); return; }
+
+  // Fazer upload dos arquivos NF antes de enviar
+  mostrarAlerta(alerta, 'success', 'Enviando arquivos...');
+  for (const c of cartoes) {
+    const fileInput = c.querySelector('.inp-nf-file');
+    const urlInput  = c.querySelector('.inp-nf-url');
+    const status    = c.querySelector('.inp-nf-status');
+    if (fileInput.files[0] && !urlInput.value) {
+      status.textContent = '⏳ enviando...';
+      const fd = new FormData();
+      fd.append('nf', fileInput.files[0]);
+      const up = await fetch('/api/upload/nf', { method: 'POST', body: fd });
+      const ud = await up.json();
+      if (up.ok) { urlInput.value = ud.url; status.textContent = '✅'; }
+      else { status.textContent = '❌ ' + ud.erro; }
+    }
+  }
+
   const rotas = [...cartoes].map(c => ({
     numero_rota:          c.querySelector('.inp-rota').value.trim(),
-    motorista_id:         c.querySelector('.sel-motorista').value || null,
-    ajudante_id:          c.querySelector('.sel-ajudante').value  || null,
-    qtd_saiu:             +c.querySelector('.inp-saiu').value,
-    qtd_entregou:         +c.querySelector('.inp-entregou').value,
-    qtd_devolveu:         +c.querySelector('.inp-devolveu').value,
-    valor_recebido:       +c.querySelector('.inp-recebido').value,
-    valor_esperado:       +c.querySelector('.inp-esperado').value,
-    mercadorias_faltando: c.querySelector('.inp-faltando').value.trim() || null,
+    numero_f1:            c.querySelector('.inp-f1').value.trim()          || null,
+    motorista_id:         c.querySelector('.sel-motorista').value           || null,
+    ajudante_id:          c.querySelector('.sel-ajudante').value            || null,
+    ajudante2_id:         c.querySelector('.sel-ajudante2').value           || null,
+    mercadorias_faltando: c.querySelector('.inp-faltando').value.trim()    || null,
+    nf_url:               c.querySelector('.inp-nf-url').value             || null,
     desconto_equipe:      c.querySelector('.chk-desconto').checked,
-    motivo_desconto:      c.querySelector('.inp-motivo').value.trim()        || null,
-    valor_desconto:       +c.querySelector('.inp-valor-desconto').value       || 0,
-    observacoes:          c.querySelector('.inp-obs').value.trim()       || null,
+    motivo_desconto:      c.querySelector('.inp-motivo').value.trim()      || null,
+    valor_desconto:       +c.querySelector('.inp-valor-desconto').value    || 0,
   }));
 
-  if (!dataRef)                       { mostrarAlerta(alerta, 'danger', 'Informe a data de referência.'); return; }
-  if (rotas.some(r => !r.numero_rota)){ mostrarAlerta(alerta, 'danger', 'Preencha o número de todas as rotas.'); return; }
+  if (rotas.some(r => !r.numero_rota)) { mostrarAlerta(alerta, 'danger', 'Preencha o número de todas as rotas.'); return; }
 
   const res  = await fetch('/api/relatorios', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data_referencia: dataRef, rotas }) });
   const data = await res.json();

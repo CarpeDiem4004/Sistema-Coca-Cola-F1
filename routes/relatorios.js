@@ -54,10 +54,11 @@ router.get('/:id', auth, async (req, res) => {
       return res.status(403).json({ erro: 'Sem permissão.' });
 
     const rotas = await db.all(`
-      SELECT rt.*, m.nome as motorista_nome, a.nome as ajudante_nome
+      SELECT rt.*, m.nome as motorista_nome, a.nome as ajudante_nome, a2.nome as ajudante2_nome
       FROM rotas rt
       LEFT JOIN funcionarios m ON m.id = rt.motorista_id
       LEFT JOIN funcionarios a ON a.id = rt.ajudante_id
+      LEFT JOIN funcionarios a2 ON a2.id = rt.ajudante2_id
       WHERE rt.relatorio_id = ?
       ORDER BY rt.numero_rota
     `, [rel.id]);
@@ -91,22 +92,20 @@ router.post('/', auth, async (req, res) => {
       for (const r of rotas) {
         await c.run(`
           INSERT INTO rotas
-            (relatorio_id, numero_rota, motorista_id, ajudante_id,
-             qtd_saiu, qtd_entregou, qtd_devolveu,
-             valor_recebido, valor_esperado,
-             mercadorias_faltando, desconto_equipe, motivo_desconto, valor_desconto, observacoes)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (relatorio_id, numero_rota, numero_f1,
+             motorista_id, ajudante_id, ajudante2_id,
+             mercadorias_faltando, nf_url,
+             desconto_equipe, motivo_desconto, valor_desconto, observacoes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           rel.lastInsertRowid,
           r.numero_rota,
+          r.numero_f1       || null,
           r.motorista_id    || null,
           r.ajudante_id     || null,
-          r.qtd_saiu        || 0,
-          r.qtd_entregou    || 0,
-          r.qtd_devolveu    || 0,
-          r.valor_recebido  || 0,
-          r.valor_esperado  || 0,
+          r.ajudante2_id    || null,
           r.mercadorias_faltando || null,
+          r.nf_url          || null,
           r.desconto_equipe ? 1 : 0,
           r.motivo_desconto || null,
           r.valor_desconto  || 0,

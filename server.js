@@ -45,6 +45,7 @@ app.use('/api/funcionarios', require('./routes/funcionarios'));
 app.use('/api/relatorios',   require('./routes/relatorios'));
 app.use('/api/bases',        require('./routes/bases'));
 app.use('/api/operadores',   require('./routes/operadores'));
+app.use('/api/upload',       require('./routes/upload'));
 
 // ── Guards de página (server-side) ────────────────────────────────────────────
 function requireLogin(req, res, next) {
