@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Coca-Cola F1 – Painel da Diretoria</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <style>
+    :root { --cc-red: #d40000; }
+    body  { background: #f0f0f0; }
+    .navbar { background: var(--cc-red) !important; }
+    .navbar-brand { font-weight: 900; letter-spacing: 1px; font-size: 1.3rem; }
+    .nav-tab-btn { cursor: pointer; padding: 8px 18px; border-radius: 8px 8px 0 0; background: #ddd; border: none; font-weight: 600; color: #333; }
+    .nav-tab-btn.active { background: var(--cc-red); color: #fff; }
+    .section { display: none; } .section.active { display: block; }
+    .btn-red { background: var(--cc-red); color: #fff; border: none; }
+    .btn-red:hover { background: #b50000; color: #fff; }
+    .card-base { border-radius: 12px; border: none; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+    .postou   { border-left: 5px solid #28a745; }
+    .nao-postou { border-left: 5px solid #dc3545; }
+    .stat-box { text-align:center; padding: 12px; border-radius: 10px; }
+    .stat-num { font-size: 1.8rem; font-weight: 900; }
+    .alerta-badge { position:relative; }
+    .alerta-count { position:absolute; top:-6px; right:-10px; background:#ff4444; color:#fff; border-radius:50%; width:20px; height:20px; font-size:11px; display:flex; align-items:center; justify-content:center; font-weight:bold; }
+    table th { background: #f8d7d7; }
+    .progresso-bar { height: 8px; border-radius: 4px; }
+    #toastAlerta { position: fixed; top: 70px; right: 20px; z-index: 9999; min-width: 320px; }
+  </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark px-3 py-2">
+  <span class="navbar-brand"><i class="bi bi-bar-chart-fill me-2"></i>Coca-Cola F1 – Diretoria</span>
+  <div class="d-flex align-items-center gap-3">
+    <div class="position-relative alerta-badge" id="btnAlertas" onclick="showTab('alertas', this)" style="cursor:pointer">
+      <i class="bi bi-bell-fill text-white fs-5"></i>
+      <span class="alerta-count d-none" id="qtdAlertas">0</span>
+    </div>
+    <input type="date" id="dataFiltro" class="form-control form-control-sm" style="width:160px" />
+    <button class="btn btn-outline-light btn-sm" onclick="logout()"><i class="bi bi-box-arrow-right me-1"></i>Sair</button>
+  </div>
+</nav>
+
+<!-- Toast de alertas -->
+<div id="toastAlerta" class="toast-container"></div>
+
+<div class="container-fluid py-4 px-4">
+
+  <!-- Tabs -->
+  <div class="d-flex gap-2 mb-0 flex-wrap">
+    <button class="nav-tab-btn active" onclick="showTab('dashboard', this)"><i class="bi bi-grid-1x2 me-1"></i>Dashboard</button>
+    <button class="nav-tab-btn" onclick="showTab('relatorios', this)"><i class="bi bi-file-earmark-text me-1"></i>Relatórios</button>
+    <button class="nav-tab-btn" onclick="showTab('bases', this)"><i class="bi bi-building me-1"></i>Bases</button>
+    <button class="nav-tab-btn" onclick="showTab('alertas', this)" id="tabBtnAlertas"><i class="bi bi-exclamation-triangle me-1"></i>Alertas</button>
+  </div>
+
+  <!-- ════════════ DASHBOARD ════════════ -->
+  <div id="tab-dashboard" class="section active bg-white rounded-bottom rounded-end p-4 shadow-sm">
+
+    <!-- Cards de resumo geral -->
+    <div class="row g-3 mb-4" id="cardsResumo">
+      <div class="col-md-3">
+        <div class="stat-box bg-success bg-opacity-10 border border-success">
+          <div class="stat-num text-success" id="totalPostaram">—</div>
+          <div class="text-muted small">Bases que postaram</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="stat-box bg-danger bg-opacity-10 border border-danger">
+          <div class="stat-num text-danger" id="totalNaoPostaram">—</div>
+          <div class="text-muted small">Bases sem relatório</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="stat-box bg-primary bg-opacity-10 border border-primary">
+          <div class="stat-num text-primary" id="totalEntregou">—</div>
+          <div class="text-muted small">Total entregas (todas bases)</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="stat-box bg-warning bg-opacity-10 border border-warning">
+          <div class="stat-num text-warning" id="totalRecebido">—</div>
+          <div class="text-muted small">Total recebido (R$)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progresso de postagem -->
+    <div class="mb-3">
+      <div class="d-flex justify-content-between mb-1">
+        <span class="fw-semibold">Progresso de postagem do dia</span>
+        <span id="pctPostagem" class="text-muted small"></span>
+      </div>
+      <div class="progress progresso-bar">
+        <div id="barPostagem" class="progress-bar bg-success" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Cards por base -->
+    <h6 class="fw-bold text-danger mt-4 mb-3"><i class="bi bi-building me-1"></i>Status por Base</h6>
+    <div class="row g-3" id="cardsBases"></div>
+  </div>
+
+  <!-- ════════════ RELATÓRIOS ════════════ -->
+  <div id="tab-relatorios" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="fw-bold mb-0"><i class="bi bi-file-earmark-text text-danger me-2"></i>Todos os Relatórios</h5>
+      <div class="d-flex gap-2">
+        <select id="filtroBase" class="form-select form-select-sm" style="width:200px">
+          <option value="">Todas as bases</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover">
+        <thead>
+          <tr><th>Base</th><th>Data Ref.</th><th>Postado em</th><th>Rotas</th><th>Entregas</th><th>Recebido</th><th>Descontos</th><th></th></tr>
+        </thead>
+        <tbody id="tbRelatorios"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════════════ BASES ════════════ -->
+  <div id="tab-bases" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="fw-bold mb-0"><i class="bi bi-building text-danger me-2"></i>Gerenciar Bases</h5>
+      <button class="btn btn-red btn-sm" data-bs-toggle="modal" data-bs-target="#modalBase">
+        <i class="bi bi-plus-circle me-1"></i>Nova Base
+      </button>
+    </div>
+    <table class="table table-bordered table-hover">
+      <thead><tr><th>Nome</th><th>Usuário</th><th>Cidade</th><th>Status</th><th></th></tr></thead>
+      <tbody id="tbBases"></tbody>
+    </table>
+  </div>
+
+  <!-- ════════════ ALERTAS ════════════ -->
+  <div id="tab-alertas" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
+    <h5 class="fw-bold mb-3"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Alertas – Bases sem Relatório</h5>
+    <div id="listaAlertas"></div>
+  </div>
+
+</div>
+
+<!-- Modal: nova base -->
+<div class="modal fade" id="modalBase" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cc-red)">
+        <h5 class="modal-title text-white fw-bold"><i class="bi bi-building me-2"></i>Nova Base</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="alertaBase" class="alert d-none"></div>
+
+        <!-- Abas do modal -->
+        <ul class="nav nav-tabs mb-3" id="tabsModalBase">
+          <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabDadosBase">
+              <i class="bi bi-building me-1"></i>Dados da Base
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabOperadores">
+              <i class="bi bi-people me-1"></i>Operadores
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content">
+          <!-- Aba: Dados da base -->
+          <div class="tab-pane fade show active" id="tabDadosBase">
+            <div class="mb-3"><label class="form-label fw-semibold">Nome da Base *</label>
+              <input type="text" id="bNome" class="form-control" placeholder="Ex: Base Curitiba" /></div>
+            <div class="mb-3"><label class="form-label fw-semibold">Cidade</label>
+              <input type="text" id="bCidade" class="form-control" placeholder="Curitiba" /></div>
+            <hr />
+            <p class="text-muted small mb-2"><i class="bi bi-info-circle me-1"></i>Login principal da base (usado pela coordenação local):</p>
+            <div class="mb-3"><label class="form-label fw-semibold">Usuário de acesso *</label>
+              <input type="text" id="bUsuario" class="form-control" placeholder="Ex: base_cwb" /></div>
+            <div class="mb-3"><label class="form-label fw-semibold">Senha *</label>
+              <input type="password" id="bSenha" class="form-control" /></div>
+          </div>
+
+          <!-- Aba: Operadores -->
+          <div class="tab-pane fade" id="tabOperadores">
+            <p class="text-muted small"><i class="bi bi-info-circle me-1"></i>Adicione operadores que farão login e lançarão relatórios para esta base.</p>
+            <div id="listaOpsNovos"></div>
+            <button class="btn btn-outline-secondary btn-sm mt-2" onclick="addOperadorNovo()">
+              <i class="bi bi-plus-circle me-1"></i>Adicionar Operador
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-red" onclick="criarBase()"><i class="bi bi-check-lg me-1"></i>Salvar Base</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: gerenciar operadores de uma base -->
+<div class="modal fade" id="modalOps" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cc-red)">
+        <h5 class="modal-title text-white fw-bold"><i class="bi bi-people me-2"></i>Operadores — <span id="tituloBaseOps"></span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="alertaOps" class="alert d-none"></div>
+        <table class="table table-bordered table-sm mb-3">
+          <thead><tr><th>Nome</th><th>Usuário</th><th>Status</th><th></th></tr></thead>
+          <tbody id="tbOps"></tbody>
+        </table>
+        <hr />
+        <h6 class="fw-bold">Adicionar Operador</h6>
+        <div class="row g-2">
+          <div class="col-md-4"><input type="text" id="opNome" class="form-control form-control-sm" placeholder="Nome completo *" /></div>
+          <div class="col-md-4"><input type="text" id="opUsuario" class="form-control form-control-sm" placeholder="Usuário de login *" /></div>
+          <div class="col-md-3"><input type="password" id="opSenha" class="form-control form-control-sm" placeholder="Senha *" /></div>
+          <div class="col-md-1"><button class="btn btn-red btn-sm w-100" onclick="salvarOperador()"><i class="bi bi-plus-lg"></i></button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: detalhe relatório -->
+<div class="modal fade" id="modalDetalhe" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cc-red)">
+        <h5 class="modal-title text-white fw-bold"><i class="bi bi-file-earmark-bar-graph me-2"></i>Detalhe do Relatório</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="corpoDetalhe"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let basesCache = [];
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+(async () => {
+  const me = await fetch('/api/auth/me').then(r => r.json()).catch(() => null);
+  if (!me || me.erro || !me.isAdmin) { window.location.href = '/'; return; }
+
+  const hoje = new Date(); hoje.setDate(hoje.getDate() - 1);
+  document.getElementById('dataFiltro').value = hoje.toISOString().slice(0, 10);
+  document.getElementById('dataFiltro').addEventListener('change', () => { carregarDashboard(); carregarRelatorios(); });
+
+  await Promise.all([carregarDashboard(), carregarRelatorios(), carregarBases(), carregarAlertas()]);
+
+  // Auto-refresh a cada 5 minutos
+  setInterval(() => { carregarDashboard(); carregarAlertas(); }, 5 * 60 * 1000);
+})();
+
+function showTab(tab, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (btn) btn.classList.add('active');
+  else document.getElementById('tabBtnAlertas').classList.add('active');
+  if (tab === 'alertas') carregarAlertas();
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+async function carregarDashboard() {
+  const data   = document.getElementById('dataFiltro').value;
+  const resumo = await fetch(`/api/relatorios/dashboard/resumo?data=${data}`).then(r => r.json());
+
+  const postaram    = resumo.bases.filter(b => b.postou).length;
+  const naoPostaram = resumo.bases.filter(b => !b.postou).length;
+  const total       = resumo.bases.length;
+
+  let totalEntregou = 0, totalRecebido = 0;
+  for (const b of resumo.bases) {
+    if (b.relatorio) {
+      totalEntregou += b.relatorio.total_entregou || 0;
+      totalRecebido += b.relatorio.total_recebido || 0;
+    }
+  }
+
+  document.getElementById('totalPostaram').textContent   = postaram;
+  document.getElementById('totalNaoPostaram').textContent = naoPostaram;
+  document.getElementById('totalEntregou').textContent   = totalEntregou.toLocaleString('pt-BR');
+  document.getElementById('totalRecebido').textContent   = 'R$ ' + totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+  const pct = total ? Math.round((postaram / total) * 100) : 0;
+  document.getElementById('pctPostagem').textContent = `${postaram}/${total} bases (${pct}%)`;
+  document.getElementById('barPostagem').style.width = pct + '%';
+
+  const container = document.getElementById('cardsBases');
+  container.innerHTML = resumo.bases.map(b => `
+    <div class="col-md-4 col-lg-3">
+      <div class="card card-base ${b.postou ? 'postou' : 'nao-postou'} p-3">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <div class="fw-bold">${b.base_nome}</div>
+            <small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${b.cidade || '—'}</small>
+          </div>
+          <span class="badge ${b.postou ? 'bg-success' : 'bg-danger'}">
+            <i class="bi bi-${b.postou ? 'check-circle' : 'x-circle'} me-1"></i>${b.postou ? 'Postou' : 'Pendente'}
+          </span>
+        </div>
+        ${b.postou ? `
+          <div class="row g-1 text-center mt-1">
+            <div class="col-4"><div class="small text-muted">Saiu</div><strong>${b.relatorio.total_saiu||0}</strong></div>
+            <div class="col-4"><div class="small text-muted">Entregou</div><strong class="text-success">${b.relatorio.total_entregou||0}</strong></div>
+            <div class="col-4"><div class="small text-muted">Devolveu</div><strong class="text-warning">${b.relatorio.total_devolveu||0}</strong></div>
+          </div>
+          <div class="mt-2 text-center">
+            <small class="text-muted">Recebido: </small><strong>R$ ${(+(b.relatorio.total_recebido||0)).toFixed(2)}</strong>
+            ${b.relatorio.total_descontos > 0 ? `<span class="badge bg-warning text-dark ms-2"><i class="bi bi-scissors me-1"></i>${b.relatorio.total_descontos} desconto(s)</span>` : ''}
+          </div>
+          <div class="mt-1 text-center"><small class="text-muted">Postado: ${new Date(b.postado_em).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</small></div>
+          <button class="btn btn-outline-danger btn-sm w-100 mt-2" onclick="verRelatorioBase(${b.base_id})">
+            <i class="bi bi-eye me-1"></i>Ver Relatório Completo
+          </button>
+        ` : `
+          <div class="text-center py-2 text-danger">
+            <i class="bi bi-clock fs-4"></i>
+            <div class="small mt-1">Aguardando envio do relatório</div>
+          </div>
+        `}
+      </div>
+    </div>`).join('');
+}
+
+// ── Relatórios ────────────────────────────────────────────────────────────────
+async function carregarRelatorios() {
+  const data   = document.getElementById('dataFiltro').value;
+  const baseId = document.getElementById('filtroBase').value;
+  let url      = `/api/relatorios?data=${data}`;
+  if (baseId) url += `&base_id=${baseId}`;
+
+  const rels = await fetch(url).then(r => r.json());
+  const tb   = document.getElementById('tbRelatorios');
+
+  tb.innerHTML = rels.length === 0
+    ? '<tr><td colspan="8" class="text-center text-muted py-3">Nenhum relatório encontrado</td></tr>'
+    : rels.map(r => `
+        <tr>
+          <td><strong>${r.base_nome}</strong><br><small class="text-muted">${r.cidade||''}</small></td>
+          <td>${r.data_referencia}</td>
+          <td>${new Date(r.postado_em).toLocaleString('pt-BR')}</td>
+          <td><span class="badge bg-secondary">${r.total_rotas}</span></td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td><button class="btn btn-outline-danger btn-sm" onclick="verDetalhe(${r.id})"><i class="bi bi-eye me-1"></i>Detalhe</button></td>
+        </tr>`).join('');
+}
+
+async function verRelatorioBase(baseId) {
+  const data = document.getElementById('dataFiltro').value;
+  const rels = await fetch(`/api/relatorios?data=${data}&base_id=${baseId}`).then(r => r.json());
+  if (rels.length > 0) verDetalhe(rels[0].id);
+}
+
+async function verDetalhe(id) {
+  const rel = await fetch(`/api/relatorios/${id}`).then(r => r.json());
+  let html  = `
+    <div class="d-flex justify-content-between mb-3">
+      <div><h6 class="fw-bold text-danger mb-0">${rel.base_nome} — ${rel.cidade||''}</h6>
+        <small class="text-muted">Referência: ${rel.data_referencia} | Postado: ${new Date(rel.postado_em).toLocaleString('pt-BR')}</small>
+      </div>
+    </div>`;
+
+  // Totalizador
+  const totSaiu      = rel.rotas.reduce((s, r) => s + r.qtd_saiu, 0);
+  const totEntregou  = rel.rotas.reduce((s, r) => s + r.qtd_entregou, 0);
+  const totDevolveu  = rel.rotas.reduce((s, r) => s + r.qtd_devolveu, 0);
+  const totRecebido  = rel.rotas.reduce((s, r) => s + r.valor_recebido, 0);
+  const totEsperado  = rel.rotas.reduce((s, r) => s + r.valor_esperado, 0);
+  const totDesconto  = rel.rotas.filter(r => r.desconto_equipe).length;
+
+  html += `
+    <div class="row g-2 mb-3">
+      <div class="col"><div class="stat-box bg-light border text-center p-2 rounded"><div class="fw-bold fs-5">${totSaiu}</div><small>Saiu</small></div></div>
+      <div class="col"><div class="stat-box bg-success bg-opacity-10 border-success border text-center p-2 rounded"><div class="fw-bold fs-5 text-success">${totEntregou}</div><small>Entregou</small></div></div>
+      <div class="col"><div class="stat-box bg-warning bg-opacity-10 border-warning border text-center p-2 rounded"><div class="fw-bold fs-5 text-warning">${totDevolveu}</div><small>Devolveu</small></div></div>
+      <div class="col"><div class="stat-box bg-primary bg-opacity-10 border-primary border text-center p-2 rounded"><div class="fw-bold fs-5 text-primary">R$ ${totRecebido.toFixed(2)}</div><small>Recebido</small></div></div>
+      <div class="col"><div class="stat-box bg-secondary bg-opacity-10 border text-center p-2 rounded"><div class="fw-bold fs-5">R$ ${totEsperado.toFixed(2)}</div><small>Esperado</small></div></div>
+      ${totDesconto > 0 ? `<div class="col"><div class="stat-box bg-danger bg-opacity-10 border-danger border text-center p-2 rounded"><div class="fw-bold fs-5 text-danger">${totDesconto}</div><small>Desc. equipe</small></div></div>` : ''}
+    </div>`;
+
+  html += `<div class="table-responsive"><table class="table table-bordered table-sm align-middle">
+    <thead><tr>
+      <th>Rota</th><th>Motorista</th><th>Ajudante</th><th>Saiu</th><th>Entregou</th><th>Devolveu</th>
+      <th>Vl.Recebido</th><th>Vl.Esperado</th><th>Faltando</th><th>Desconto</th><th>Vl.Desconto</th><th>Motivo</th><th>Obs</th>
+    </tr></thead><tbody>`;
+
+  for (const r of rel.rotas) {
+    const diff = r.valor_esperado - r.valor_recebido;
+    html += `<tr class="${r.desconto_equipe ? 'table-warning' : ''}">
+      <td><strong>${r.numero_rota}</strong></td>
+      <td>${r.motorista_nome||'—'}</td>
+      <td>${r.ajudante_nome||'—'}</td>
+      <td>${r.qtd_saiu}</td>
+      <td>${r.qtd_entregou}</td>
+      <td>${r.qtd_devolveu}</td>
+      <td>R$ ${(+r.valor_recebido).toFixed(2)}</td>
+      <td>R$ ${(+r.valor_esperado).toFixed(2)} ${diff > 0 ? `<span class="badge bg-danger ms-1">-R$${diff.toFixed(2)}</span>` : ''}</td>
+      <td>${r.mercadorias_faltando ? `<span class="text-danger">${r.mercadorias_faltando}</span>` : '—'}</td>
+      <td>${r.desconto_equipe ? '<span class="badge bg-danger">SIM</span>' : '<span class="badge bg-success">Não</span>'}</td>
+      <td>${r.valor_desconto > 0 ? `<span class="text-danger fw-bold">R$ ${(+r.valor_desconto).toFixed(2)}</span>` : '—'}</td>
+      <td>${r.motivo_desconto||'—'}</td>
+      <td>${r.observacoes||'—'}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  document.getElementById('corpoDetalhe').innerHTML = html;
+  new bootstrap.Modal(document.getElementById('modalDetalhe')).show();
+}
+
+// ── Bases ─────────────────────────────────────────────────────────────────────
+async function carregarBases() {
+  basesCache = await fetch('/api/bases').then(r => r.json());
+  const tb   = document.getElementById('tbBases');
+  const sel  = document.getElementById('filtroBase');
+
+  sel.innerHTML = '<option value="">Todas as bases</option>' +
+    basesCache.map(b => `<option value="${b.id}">${b.nome}</option>`).join('');
+  sel.addEventListener('change', carregarRelatorios);
+
+  tb.innerHTML = basesCache.map(b => `
+    <tr>
+      <td><strong>${b.nome}</strong></td>
+      <td><code>${b.usuario}</code></td>
+      <td>${b.cidade||'—'}</td>
+      <td><span class="badge ${b.ativo ? 'bg-success' : 'bg-secondary'}">${b.ativo ? 'Ativa' : 'Inativa'}</span></td>
+      <td class="d-flex gap-1 flex-wrap">
+        <button class="btn btn-outline-primary btn-sm" onclick="abrirOps(${b.id}, '${b.nome.replace(/'/g, "\\'")}')">
+          <i class="bi bi-people me-1"></i>Operadores
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="toggleBase(${b.id}, ${b.ativo})">
+          <i class="bi bi-${b.ativo ? 'pause-circle' : 'play-circle'} me-1"></i>${b.ativo ? 'Desativar' : 'Ativar'}
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="excluirBase(${b.id}, '${b.nome.replace(/'/g, "\\'")}')">
+          <i class="bi bi-trash-fill me-1"></i>Excluir
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+// ── operadores no modal "Nova Base" ──────────────────────────────────────────
+let opIdx = 0;
+function addOperadorNovo() {
+  const idx = ++opIdx;
+  const div = document.createElement('div');
+  div.id = `op-novo-${idx}`;
+  div.className = 'border rounded p-2 mb-2 bg-light';
+  div.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-1">
+      <span class="small fw-semibold text-danger"><i class="bi bi-person-fill me-1"></i>Operador ${idx}</span>
+      <button type="button" class="btn btn-outline-danger btn-sm py-0" onclick="this.closest('[id]').remove()"><i class="bi bi-x"></i></button>
+    </div>
+    <div class="row g-2">
+      <div class="col-md-4"><input type="text" class="form-control form-control-sm op-nome" placeholder="Nome completo *" /></div>
+      <div class="col-md-4"><input type="text" class="form-control form-control-sm op-usuario" placeholder="Usuário de login *" /></div>
+      <div class="col-md-4"><input type="password" class="form-control form-control-sm op-senha" placeholder="Senha *" /></div>
+    </div>`;
+  document.getElementById('listaOpsNovos').appendChild(div);
+}
+
+async function criarBase() {
+  const nome    = document.getElementById('bNome').value.trim();
+  const usuario = document.getElementById('bUsuario').value.trim();
+  const senha   = document.getElementById('bSenha').value;
+  const cidade  = document.getElementById('bCidade').value.trim();
+  const alerta  = document.getElementById('alertaBase');
+
+  if (!nome || !usuario || !senha) {
+    alerta.className = 'alert alert-danger';
+    alerta.textContent = 'Preencha nome, usuário e senha da base.';
+    // Ir para aba de dados
+    document.querySelector('[data-bs-target="#tabDadosBase"]').click();
+    return;
+  }
+
+  const res  = await fetch('/api/bases', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nome, usuario, senha, cidade}) });
+  const data = await res.json();
+  if (!res.ok) { alerta.className='alert alert-danger'; alerta.textContent=data.erro; return; }
+
+  const baseId = data.id;
+
+  // Criar operadores adicionados
+  const blocos = document.querySelectorAll('#listaOpsNovos > div');
+  const errosOp = [];
+  for (const bloco of blocos) {
+    const opNome    = bloco.querySelector('.op-nome').value.trim();
+    const opUsuario = bloco.querySelector('.op-usuario').value.trim();
+    const opSenha   = bloco.querySelector('.op-senha').value;
+    if (!opNome || !opUsuario || !opSenha) { errosOp.push(`Preencha todos os campos do operador "${opNome || '?'}".`); continue; }
+    const r = await fetch('/api/operadores', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ base_id: baseId, nome: opNome, usuario: opUsuario, senha: opSenha }) });
+    if (!r.ok) { const d = await r.json(); errosOp.push(d.erro); }
+  }
+
+  if (errosOp.length > 0) {
+    alerta.className = 'alert alert-warning';
+    alerta.innerHTML = `Base criada, mas há erros nos operadores:<br>` + errosOp.map(e => `• ${e}`).join('<br>');
+  } else {
+    alerta.className = 'alert alert-success';
+    alerta.textContent = 'Base e operadores criados com sucesso!';
+  }
+
+  await carregarBases();
+  document.getElementById('listaOpsNovos').innerHTML = '';
+  opIdx = 0;
+  setTimeout(() => { if (!errosOp.length) bootstrap.Modal.getInstance(document.getElementById('modalBase')).hide(); }, 1500);
+}
+
+// ── Gerenciar operadores de uma base existente ────────────────────────────────
+let baseIdOps = null;
+
+async function abrirOps(baseId, baseNome) {
+  baseIdOps = baseId;
+  document.getElementById('tituloBaseOps').textContent = baseNome;
+  document.getElementById('alertaOps').className = 'alert d-none';
+  document.getElementById('opNome').value = '';
+  document.getElementById('opUsuario').value = '';
+  document.getElementById('opSenha').value = '';
+  await renderOps();
+  new bootstrap.Modal(document.getElementById('modalOps')).show();
+}
+
+async function renderOps() {
+  const ops = await fetch(`/api/operadores?base_id=${baseIdOps}`).then(r => r.json());
+  const tb  = document.getElementById('tbOps');
+  tb.innerHTML = ops.length === 0
+    ? '<tr><td colspan="4" class="text-center text-muted">Nenhum operador cadastrado</td></tr>'
+    : ops.map(o => `
+        <tr>
+          <td>${o.nome}</td>
+          <td><code>${o.usuario}</code></td>
+          <td><span class="badge ${o.ativo ? 'bg-success' : 'bg-secondary'}">${o.ativo ? 'Ativo' : 'Inativo'}</span></td>
+          <td class="d-flex gap-1">
+            <button class="btn btn-outline-secondary btn-sm" onclick="toggleOp(${o.id}, ${o.ativo})">
+              <i class="bi bi-${o.ativo ? 'pause-circle' : 'play-circle'}"></i>
+            </button>
+            <button class="btn btn-outline-danger btn-sm" onclick="excluirOp(${o.id})">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>`).join('');
+}
+
+async function salvarOperador() {
+  const nome    = document.getElementById('opNome').value.trim();
+  const usuario = document.getElementById('opUsuario').value.trim();
+  const senha   = document.getElementById('opSenha').value;
+  const alerta  = document.getElementById('alertaOps');
+
+  if (!nome || !usuario || !senha) {
+    alerta.className = 'alert alert-danger'; alerta.textContent = 'Preencha nome, usuário e senha.'; return;
+  }
+  const res  = await fetch('/api/operadores', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ base_id: baseIdOps, nome, usuario, senha }) });
+  const data = await res.json();
+  if (!res.ok) { alerta.className='alert alert-danger'; alerta.textContent=data.erro; return; }
+
+  alerta.className = 'alert alert-success'; alerta.textContent = 'Operador criado!';
+  document.getElementById('opNome').value = '';
+  document.getElementById('opUsuario').value = '';
+  document.getElementById('opSenha').value = '';
+  await renderOps();
+  setTimeout(() => alerta.className = 'alert d-none', 2000);
+}
+
+async function toggleOp(id, ativo) {
+  await fetch(`/api/operadores/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ativo: ativo ? 0 : 1 }) });
+  await renderOps();
+}
+
+async function excluirOp(id) {
+  if (!confirm('Excluir este operador?')) return;
+  await fetch(`/api/operadores/${id}`, { method:'DELETE' });
+  await renderOps();
+}
+
+async function toggleBase(id, ativo) {
+  await fetch(`/api/bases/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ativo: ativo ? 0 : 1 }) });
+  await carregarBases();
+}
+
+async function excluirBase(id, nome) {
+  if (!confirm(`⚠️ Tem certeza que deseja EXCLUIR a base "${nome}"?\n\nTodos os relatórios, funcionários e alertas desta base serão removidos permanentemente.`)) return;
+  const res  = await fetch(`/api/bases/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) { alert(data.erro); return; }
+  await carregarBases();
+  await carregarDashboard();
+}
+
+// ── Alertas ───────────────────────────────────────────────────────────────────
+async function carregarAlertas() {
+  const alertas = await fetch('/api/relatorios/alertas/pendentes').then(r => r.json());
+  const cont    = document.getElementById('listaAlertas');
+  const badge   = document.getElementById('qtdAlertas');
+
+  if (alertas.length > 0) {
+    badge.textContent = alertas.length;
+    badge.classList.remove('d-none');
+  } else {
+    badge.classList.add('d-none');
+  }
+
+  cont.innerHTML = alertas.length === 0
+    ? '<div class="alert alert-success"><i class="bi bi-check-circle-fill me-2"></i>Nenhum alerta pendente. Todas as bases postaram!</div>'
+    : alertas.map(a => `
+        <div class="alert alert-danger d-flex justify-content-between align-items-center">
+          <div>
+            <strong><i class="bi bi-exclamation-triangle-fill me-2"></i>${a.base_nome}</strong> — ${a.cidade||''}
+            <br><small>${a.mensagem}</small>
+            <br><small class="text-muted">Gerado em: ${new Date(a.criado_em).toLocaleString('pt-BR')}</small>
+          </div>
+          <button class="btn btn-outline-danger btn-sm" onclick="marcarLido(${a.id})">
+            <i class="bi bi-check-lg me-1"></i>Marcar como lido
+          </button>
+        </div>`).join('');
+}
+
+async function marcarLido(id) {
+  await fetch(`/api/relatorios/alertas/${id}/lido`, { method:'PUT' });
+  await carregarAlertas();
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/';
+}
+</script>
+</body>
+</html>
