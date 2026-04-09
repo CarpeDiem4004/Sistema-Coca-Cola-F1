@@ -21,6 +21,19 @@
     .section { display: none; } .section.active { display: block; }
     .badge-desconto { background: #ff6b35; color: #fff; }
     table th { background: #f8d7d7; }
+    /* Histórico */
+    .hist-stat-card { border-left: 4px solid var(--cc-red); border-radius: 8px; background: #fff; padding: 14px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+    .hist-stat-card .stat-val { font-size: 1.7rem; font-weight: 800; color: var(--cc-red); }
+    .hist-stat-card .stat-lbl { font-size: .78rem; color: #666; text-transform: uppercase; letter-spacing: .5px; }
+    .rank-badge { display: inline-block; width: 22px; height: 22px; border-radius: 50%; font-size: .75rem; font-weight: 700; text-align: center; line-height: 22px; }
+    .rank-1 { background: #ffd700; color: #333; }
+    .rank-2 { background: #c0c0c0; color: #333; }
+    .rank-3 { background: #cd7f32; color: #fff; }
+    .rank-n { background: #e9ecef; color: #555; }
+    .search-result-card { border: 1px solid #dee2e6; border-radius: 8px; padding: 12px 16px; background: #fff; margin-bottom: 8px; }
+    .mes-bar { height: 8px; border-radius: 4px; background: var(--cc-red); display: inline-block; }
+    .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; font-size: .82rem; font-weight: 600; }
+    .hist-section-title { font-size: .85rem; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #888; border-bottom: 2px solid #f3f3f3; padding-bottom: 6px; margin-bottom: 12px; }
   </style>
 </head>
 <body>
@@ -38,9 +51,9 @@
 
   <!-- Tabs -->
   <div class="d-flex gap-2 mb-0">
-    <button class="nav-tab-btn active" onclick="showTab('relatorio')"><i class="bi bi-file-earmark-text me-1"></i>Relatório F1</button>
-    <button class="nav-tab-btn" onclick="showTab('funcionarios')"><i class="bi bi-people me-1"></i>Funcionários</button>
-    <button class="nav-tab-btn" onclick="showTab('historico')"><i class="bi bi-clock-history me-1"></i>Histórico</button>
+    <button class="nav-tab-btn active" onclick="showTab('relatorio',this)"><i class="bi bi-file-earmark-text me-1"></i>Relatório F1</button>
+    <button class="nav-tab-btn" onclick="showTab('funcionarios',this)"><i class="bi bi-people me-1"></i>Funcionários</button>
+    <button class="nav-tab-btn" onclick="showTab('historico',this)"><i class="bi bi-clock-history me-1"></i>Histórico</button>
   </div>
 
   <!-- ════════════════ TAB: RELATÓRIO F1 ════════════════ -->
@@ -53,9 +66,7 @@
       </div>
     </div>
 
-    <div id="avisoJaPostou" class="alert alert-success d-none">
-      <i class="bi bi-check-circle-fill me-2"></i>Relatório já enviado para esta data.
-    </div>
+    <div id="avisoJaPostou" class="alert alert-success d-none"></div>
     <div id="alertaRel" class="alert d-none"></div>
 
     <div id="listaRotas"></div>
@@ -94,12 +105,95 @@
 
   <!-- ════════════════ TAB: HISTÓRICO ════════════════ -->
   <div id="tab-historico" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
-    <h5 class="fw-bold mb-3"><i class="bi bi-clock-history text-danger me-2"></i>Histórico de Relatórios</h5>
-    <table class="table table-bordered table-hover">
-      <thead><tr><th>Data Ref.</th><th>Postado em</th><th>Rotas</th><th></th></tr></thead>
-      <tbody id="tbHistorico"></tbody>
-    </table>
-  </div>
+
+    <!-- ── Mini-Dashboard ── -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="fw-bold mb-0"><i class="bi bi-bar-chart-line text-danger me-2"></i>Painel da Base</h5>
+      <button class="btn btn-outline-secondary btn-sm" onclick="carregarStats()"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button>
+    </div>
+
+    <!-- Cards de totais -->
+    <div class="row g-3 mb-4" id="statsCards">
+      <div class="col-6 col-md-3">
+        <div class="hist-stat-card">
+          <div class="stat-val" id="stRelatorios">—</div>
+          <div class="stat-lbl"><i class="bi bi-file-earmark-text me-1"></i>Relatórios</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="hist-stat-card">
+          <div class="stat-val" id="stRotas">—</div>
+          <div class="stat-lbl"><i class="bi bi-signpost-2 me-1"></i>Rotas</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="hist-stat-card">
+          <div class="stat-val" id="stDescontos">—</div>
+          <div class="stat-lbl"><i class="bi bi-exclamation-triangle me-1"></i>Descontos</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="hist-stat-card">
+          <div class="stat-val" id="stValor">—</div>
+          <div class="stat-lbl"><i class="bi bi-cash-coin me-1"></i>Vl. Desconto</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+      <!-- Últimos 6 meses -->
+      <div class="col-md-5">
+        <div class="p-3 border rounded bg-white">
+          <div class="hist-section-title"><i class="bi bi-calendar3 me-1"></i>Últimos 6 Meses</div>
+          <div id="tabelaMeses"><div class="text-muted small">Carregando...</div></div>
+        </div>
+      </div>
+      <!-- Status de descontos -->
+      <div class="col-md-7">
+        <div class="p-3 border rounded bg-white">
+          <div class="hist-section-title"><i class="bi bi-pie-chart me-1"></i>Status de Descontos</div>
+          <div id="statusDescontoBloco"><div class="text-muted small">Carregando...</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Busca de funcionário -->
+    <div class="p-3 border rounded bg-white mb-4">
+      <div class="hist-section-title"><i class="bi bi-search me-1"></i>Pesquisar Funcionário</div>
+      <div class="input-group">
+        <input type="text" id="buscaFunc" class="form-control" placeholder="Nome ou CPF do motorista / ajudante..."
+          onkeydown="if(event.key==='Enter') buscarFuncionario()" />
+        <button class="btn btn-red" onclick="buscarFuncionario()"><i class="bi bi-search me-1"></i>Buscar</button>
+      </div>
+      <div id="resultadoBusca" class="mt-3"></div>
+    </div>
+
+    <!-- Rankings -->
+    <div class="row g-4 mb-4">
+      <div class="col-md-6">
+        <div class="p-3 border rounded bg-white">
+          <div class="hist-section-title"><i class="bi bi-trophy me-1"></i>Ranking Motoristas</div>
+          <div id="rankMotoristas"><div class="text-muted small">Carregando...</div></div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="p-3 border rounded bg-white">
+          <div class="hist-section-title"><i class="bi bi-trophy me-1"></i>Ranking Ajudantes</div>
+          <div id="rankAjudantes"><div class="text-muted small">Carregando...</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lista de relatórios -->
+    <div class="p-3 border rounded bg-white">
+      <div class="hist-section-title"><i class="bi bi-list-ul me-1"></i>Todos os Relatórios</div>
+      <table class="table table-bordered table-hover table-sm">
+        <thead><tr><th>Data Ref.</th><th>Postado em</th><th>Rotas</th><th></th></tr></thead>
+        <tbody id="tbHistorico"></tbody>
+      </table>
+    </div>
+
+  </div><!-- /tab-historico -->
 
 </div><!-- /container -->
 
@@ -163,7 +257,6 @@ let rotaIdx = 0;
   if (me.isAdmin)     { window.location.href = '/admin'; return; }
   document.getElementById('nomeBase').textContent = me.nome;
 
-  // data padrão = ontem (D-1)
   const ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
   document.getElementById('dataRef').value = ontem.toISOString().slice(0, 10);
   document.getElementById('dataRef').addEventListener('change', verificarData);
@@ -174,11 +267,12 @@ let rotaIdx = 0;
   await verificarData();
 })();
 
-function showTab(tab) {
+function showTab(tab, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
-  event.currentTarget.classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (tab === 'historico') carregarStats();
 }
 
 // ── Funcionários ─────────────────────────────────────────────────────────────
@@ -200,7 +294,6 @@ function renderFuncionarios() {
             <td><button class="btn btn-outline-danger btn-sm" onclick="removerFunc(${f.id})"><i class="bi bi-trash"></i></button></td>
           </tr>`).join('');
   });
-  // atualizar selects de rotas
   document.querySelectorAll('.sel-motorista, .sel-ajudante, .sel-ajudante2').forEach(sel => {
     const tipo = sel.classList.contains('sel-motorista') ? 'motorista' : 'ajudante';
     const val  = sel.value;
@@ -214,13 +307,10 @@ async function salvarFuncionario() {
   const cargo = document.getElementById('fCargo').value;
   const cpf   = document.getElementById('fCpf').value.trim();
   const alerta = document.getElementById('alertaFunc');
-
   if (!nome) { alerta.className='alert alert-danger'; alerta.textContent='Nome obrigatório.'; return; }
-
   const res  = await fetch('/api/funcionarios', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nome, cargo, cpf}) });
   const data = await res.json();
   if (!res.ok) { alerta.className='alert alert-danger'; alerta.textContent=data.erro; return; }
-
   alerta.className='alert alert-success'; alerta.textContent='Funcionário cadastrado!';
   document.getElementById('fNome').value = '';
   document.getElementById('fCpf').value  = '';
@@ -333,17 +423,20 @@ function removerRota(idx) {
 
 // ── Máscara de moeda BR ───────────────────────────────────────────────────────
 function mascaraMoeda(input) {
-  let v = input.value.replace(/\D/g, '');          // só dígitos
-  v = (parseInt(v) || 0).toString();               // remove zeros à esquerda
-  v = v.padStart(3, '0');                          // mínimo 3 dígitos
-  const cents  = v.slice(-2);
-  const reais  = v.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  input.value  = `R$ ${reais},${cents}`;
+  let v = input.value.replace(/\D/g, '');
+  v = (parseInt(v) || 0).toString();
+  v = v.padStart(3, '0');
+  const cents = v.slice(-2);
+  const reais = v.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  input.value = `R$ ${reais},${cents}`;
 }
 
 function parseMoeda(val) {
-  // "R$ 1.234,56" → 1234.56
   return parseFloat((val || '0').replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
+}
+
+function fmtBRL(v) {
+  return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function atualizarStatusDesconto(card) {
@@ -353,12 +446,10 @@ function atualizarStatusDesconto(card) {
   const label    = card.querySelector('.inp-label-motivo');
   const compFile = card.querySelector('.inp-comp-file');
 
-  // Mostrar/ocultar painel de justificativa
   const precisaJustif = ['motorista','equipe','abonar','regularizado','pago'].includes(status);
   painel.classList.toggle('d-none', !precisaJustif || status === 'nenhum');
   comprov.classList.toggle('d-none', status !== 'pago');
 
-  // Comprovante obrigatório para "pago"
   if (compFile) {
     compFile.required = (status === 'pago');
     const aviso = card.querySelector('.aviso-comprovante');
@@ -372,7 +463,6 @@ function atualizarStatusDesconto(card) {
     } else if (aviso) aviso.remove();
   }
 
-  // Labels contextuais
   const labels = {
     motorista:    'Motivo do desconto *',
     equipe:       'Motivo do desconto *',
@@ -381,7 +471,6 @@ function atualizarStatusDesconto(card) {
     pago:         'Observação do pagamento'
   };
   if (label) label.textContent = labels[status] || 'Justificativa *';
-
   atualizarDesconto(card);
 }
 
@@ -391,12 +480,11 @@ function atualizarDesconto(card) {
   const divPPessoa = card.querySelector('.inp-valor-por-pessoa');
 
   if (status === 'equipe' && valor > 0) {
-    // Contar membros selecionados
     const tem = (sel) => card.querySelector(sel)?.value ? 1 : 0;
     const qtd = tem('.sel-motorista') + tem('.sel-ajudante') + tem('.sel-ajudante2');
     if (qtd > 0) {
       const pp = (valor / qtd).toFixed(2);
-      divPPessoa.textContent = `R$ ${pp} por pessoa (${qtd} membro${qtd>1?'s':''})`;
+      divPPessoa.textContent = `R$ ${pp.replace('.', ',')} por pessoa (${qtd} membro${qtd>1?'s':''})`;
       divPPessoa.classList.remove('d-none');
     } else {
       divPPessoa.textContent = 'Selecione os membros da equipe acima';
@@ -428,10 +516,8 @@ async function enviarRelatorio() {
 
   if (!dataRef) { mostrarAlerta(alerta, 'danger', 'Informe a data de referência.'); return; }
 
-  // Upload de arquivos (NF e comprovante) antes de enviar
   mostrarAlerta(alerta, 'success', 'Enviando arquivos...');
   for (const c of cartoes) {
-    // Upload NF
     const nfFile = c.querySelector('.inp-nf-file');
     const nfUrl  = c.querySelector('.inp-nf-url');
     const nfSt   = c.querySelector('.inp-nf-upload-status');
@@ -443,7 +529,6 @@ async function enviarRelatorio() {
       if (up.ok) { nfUrl.value = ud.url; nfSt.textContent = '✅'; }
       else { nfSt.textContent = '❌'; }
     }
-    // Upload Comprovante
     const compFile = c.querySelector('.inp-comp-file');
     const compUrl  = c.querySelector('.inp-comp-url');
     const compSt   = c.querySelector('.inp-comp-upload-status');
@@ -460,7 +545,6 @@ async function enviarRelatorio() {
   const rotas = [...cartoes].map(c => {
     const status = c.querySelector('.sel-status-desconto').value;
     const valor  = parseMoeda(c.querySelector('.inp-valor-desconto').value);
-    // Calcular valor por pessoa se equipe
     let valorPorPessoa = null;
     if (status === 'equipe' && valor > 0) {
       const qtd = ['.sel-motorista','.sel-ajudante','.sel-ajudante2'].filter(s => c.querySelector(s)?.value).length;
@@ -485,31 +569,21 @@ async function enviarRelatorio() {
 
   if (rotas.some(r => !r.numero_rota)) { mostrarAlerta(alerta, 'danger', 'Preencha o número de todas as rotas.'); return; }
 
-  // Validar: status "pago" exige comprovante
-  const semComprovante = rotas
-    .map((r, i) => ({ ...r, idx: i + 1 }))
-    .filter(r => r.status_desconto === 'pago' && !r.comprovante_url);
+  const semComprovante = rotas.map((r,i)=>({...r,idx:i+1})).filter(r => r.status_desconto === 'pago' && !r.comprovante_url);
   if (semComprovante.length > 0) {
-    const nums = semComprovante.map(r => `Rota #${r.idx} (${r.numero_rota||'?'})`).join(', ');
-    mostrarAlerta(alerta, 'danger', `Status "Pago" exige comprovante anexado: ${nums}`);
+    mostrarAlerta(alerta, 'danger', `Status "Pago" exige comprovante: ${semComprovante.map(r=>`Rota #${r.idx}`).join(', ')}`);
     return;
   }
 
-  // Validar: status que exigem justificativa
-  const semMotivo = rotas
-    .map((r, i) => ({ ...r, idx: i + 1 }))
-    .filter(r => ['motorista','equipe','abonar','regularizado'].includes(r.status_desconto) && !r.motivo_desconto);
+  const semMotivo = rotas.map((r,i)=>({...r,idx:i+1})).filter(r => ['motorista','equipe','abonar','regularizado'].includes(r.status_desconto) && !r.motivo_desconto);
   if (semMotivo.length > 0) {
-    const nums = semMotivo.map(r => `Rota #${r.idx}`).join(', ');
-    mostrarAlerta(alerta, 'danger', `Justificativa obrigatória para: ${nums}`);
+    mostrarAlerta(alerta, 'danger', `Justificativa obrigatória: ${semMotivo.map(r=>`Rota #${r.idx}`).join(', ')}`);
     return;
   }
 
   const res  = await fetch('/api/relatorios', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data_referencia: dataRef, rotas }) });
   const data = await res.json();
-
   if (!res.ok) { mostrarAlerta(alerta, 'danger', data.erro); return; }
-
   mostrarAlerta(alerta, 'success', 'Relatório enviado com sucesso!');
   await verificarData();
   await carregarHistorico();
@@ -537,26 +611,175 @@ async function carregarHistorico() {
         </tr>`).join('');
 }
 
+// ── Stats / Mini-dash ────────────────────────────────────────────────────────
+const STATUS_INFO = {
+  nenhum:      { label: 'Sem desconto',      icon: '—',  cor: '#6c757d' },
+  motorista:   { label: 'Desc. Motorista',   icon: '🚛', cor: '#dc3545' },
+  equipe:      { label: 'Desc. Equipe',      icon: '👥', cor: '#fd7e14' },
+  abonar:      { label: 'Abonado',           icon: '✅', cor: '#198754' },
+  regularizado:{ label: 'Regularizado',      icon: '🔄', cor: '#0d6efd' },
+  pago:        { label: 'Pago',              icon: '💳', cor: '#6610f2' },
+};
+
+async function carregarStats() {
+  try {
+    const data = await fetch('/api/relatorios/stats/base').then(r => r.json());
+    if (data.erro) { console.warn('stats:', data.erro); return; }
+
+    // Cards
+    document.getElementById('stRelatorios').textContent = data.totais.total_relatorios;
+    document.getElementById('stRotas').textContent      = data.totais.total_rotas;
+    document.getElementById('stDescontos').textContent  = data.totais.total_descontos;
+    document.getElementById('stValor').textContent      = fmtBRL(data.totais.total_valor_desconto);
+
+    // Últimos 6 meses
+    const maxRotas = Math.max(...data.porMes.map(m => +m.rotas || 0), 1);
+    document.getElementById('tabelaMeses').innerHTML = data.porMes.length === 0
+      ? '<p class="text-muted small">Nenhum dado</p>'
+      : data.porMes.map(m => {
+          const pct = Math.round((m.rotas / maxRotas) * 100);
+          const [ano, mes] = m.mes.split('-');
+          const nomeMes = new Date(ano, mes-1, 1).toLocaleString('pt-BR', {month:'short', year:'2-digit'}).toUpperCase();
+          return `<div class="d-flex align-items-center gap-2 mb-2">
+            <span style="min-width:52px;font-size:.82rem;font-weight:600">${nomeMes}</span>
+            <div style="flex:1">
+              <div style="height:8px;border-radius:4px;background:#f3f3f3">
+                <div style="height:8px;border-radius:4px;background:#d40000;width:${pct}%"></div>
+              </div>
+            </div>
+            <span class="badge bg-secondary" style="min-width:30px">${m.rotas}</span>
+            <span class="text-danger small fw-semibold" style="min-width:80px;text-align:right">${fmtBRL(m.valor_desconto)}</span>
+          </div>`;
+        }).join('');
+
+    // Status de descontos
+    document.getElementById('statusDescontoBloco').innerHTML = data.statusDescontos.length === 0
+      ? '<p class="text-muted small">Nenhum dado</p>'
+      : data.statusDescontos.map(s => {
+          const info = STATUS_INFO[s.status_desconto] || { label: s.status_desconto, icon: '•', cor: '#999' };
+          return `<div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="status-pill" style="background:${info.cor}20;color:${info.cor};border:1px solid ${info.cor}40">
+              ${info.icon} ${info.label}
+            </span>
+            <div class="d-flex gap-3 align-items-center">
+              <span class="badge" style="background:${info.cor}">${s.quantidade} rota(s)</span>
+              <span class="fw-bold text-danger small">${fmtBRL(s.valor_total)}</span>
+            </div>
+          </div>`;
+        }).join('');
+
+    // Ranking motoristas
+    document.getElementById('rankMotoristas').innerHTML = data.rankMotoristas.length === 0
+      ? '<p class="text-muted small">Nenhum dado</p>'
+      : `<table class="table table-sm table-hover mb-0">
+          <thead><tr><th>#</th><th>Nome</th><th class="text-center">Rotas</th><th class="text-end">Desc.</th></tr></thead>
+          <tbody>
+          ${data.rankMotoristas.map((m, i) => `<tr>
+            <td><span class="rank-badge rank-${i < 3 ? i+1 : 'n'}">${i+1}</span></td>
+            <td>${m.nome}</td>
+            <td class="text-center"><span class="badge bg-secondary">${m.total_rotas}</span></td>
+            <td class="text-end text-danger fw-semibold small">${+m.total_desconto > 0 ? fmtBRL(m.total_desconto) : '—'}</td>
+          </tr>`).join('')}
+          </tbody>
+        </table>`;
+
+    // Ranking ajudantes
+    document.getElementById('rankAjudantes').innerHTML = data.rankAjudantes.length === 0
+      ? '<p class="text-muted small">Nenhum dado</p>'
+      : `<table class="table table-sm table-hover mb-0">
+          <thead><tr><th>#</th><th>Nome</th><th class="text-center">Rotas</th></tr></thead>
+          <tbody>
+          ${data.rankAjudantes.map((a, i) => `<tr>
+            <td><span class="rank-badge rank-${i < 3 ? i+1 : 'n'}">${i+1}</span></td>
+            <td>${a.nome}</td>
+            <td class="text-center"><span class="badge bg-secondary">${a.total_rotas}</span></td>
+          </tr>`).join('')}
+          </tbody>
+        </table>`;
+
+  } catch (err) { console.error('carregarStats:', err); }
+}
+
+// ── Busca funcionário ────────────────────────────────────────────────────────
+async function buscarFuncionario() {
+  const busca = document.getElementById('buscaFunc').value.trim();
+  const div   = document.getElementById('resultadoBusca');
+  if (!busca) { div.innerHTML = '<p class="text-muted small">Digite um nome ou CPF para pesquisar.</p>'; return; }
+
+  div.innerHTML = '<div class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>Buscando...</div>';
+  const data = await fetch(`/api/relatorios/stats/funcionario?busca=${encodeURIComponent(busca)}`).then(r => r.json());
+
+  if (data.erro) { div.innerHTML = `<p class="text-danger small">${data.erro}</p>`; return; }
+  if (data.funcionarios.length === 0) { div.innerHTML = '<p class="text-muted small">Nenhum funcionário encontrado.</p>'; return; }
+
+  let html = '';
+  for (const f of data.funcionarios) {
+    const rotas = data.rotas.filter(r =>
+      r.mot_id === f.id || r.aj1_id === f.id || r.aj2_id === f.id
+    );
+    const papeis = [];
+    if (data.rotas.some(r => r.mot_id === f.id))       papeis.push('Motorista');
+    if (data.rotas.some(r => r.aj1_id === f.id || r.aj2_id === f.id)) papeis.push('Ajudante');
+
+    html += `<div class="search-result-card mb-3">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div>
+          <strong class="fs-6">${f.nome}</strong>
+          ${f.cpf ? `<span class="text-muted small ms-2">${f.cpf}</span>` : ''}
+          <br><span class="badge bg-secondary me-1">${f.cargo}</span>
+          ${papeis.map(p=>`<span class="badge bg-primary me-1">${p}</span>`).join('')}
+        </div>
+        <span class="badge bg-danger rounded-pill">${rotas.length} rota(s)</span>
+      </div>
+      ${rotas.length > 0 ? `
+      <div class="table-responsive" style="max-height:200px;overflow-y:auto">
+        <table class="table table-sm table-bordered mb-0">
+          <thead><tr><th>Data</th><th>Rota</th><th>Nº F1</th><th>Motorista</th><th>Aj.1</th><th>Aj.2</th><th>Status</th><th>Vl. Desc.</th></tr></thead>
+          <tbody>
+          ${rotas.map(r => {
+            const info = STATUS_INFO[r.status_desconto] || { label: r.status_desconto, icon: '•', cor: '#999' };
+            return `<tr>
+              <td class="text-nowrap">${r.data_referencia}</td>
+              <td>${r.numero_rota}</td>
+              <td>${r.numero_f1 || '—'}</td>
+              <td>${r.motorista_nome || '—'}</td>
+              <td>${r.ajudante_nome  || '—'}</td>
+              <td>${r.ajudante2_nome || '—'}</td>
+              <td><span style="color:${info.cor};font-weight:600;font-size:.8rem">${info.icon} ${info.label}</span></td>
+              <td class="text-danger fw-semibold">${+r.valor_desconto > 0 ? fmtBRL(r.valor_desconto) : '—'}</td>
+            </tr>`;
+          }).join('')}
+          </tbody>
+        </table>
+      </div>` : '<p class="text-muted small mb-0">Nenhuma rota encontrada.</p>'}
+    </div>`;
+  }
+  div.innerHTML = html;
+}
+
+// ── Detalhe do relatório ─────────────────────────────────────────────────────
 async function verDetalhe(id) {
   const rel = await fetch(`/api/relatorios/${id}`).then(r => r.json());
-  let html  = `<h6 class="fw-bold text-danger">Data: ${rel.data_referencia} — ${rel.base_nome}</h6>`;
+  let html  = `<p class="fw-bold text-danger mb-2">Data: ${rel.data_referencia} — ${rel.base_nome} / ${rel.cidade || ''}</p>`;
   html += `<div class="table-responsive"><table class="table table-bordered table-sm">
-    <thead><tr><th>Rota</th><th>Motorista</th><th>Ajudante</th><th>Saiu</th><th>Entregou</th><th>Devolveu</th><th>Vl.Recebido</th><th>Vl.Esperado</th><th>Faltando</th><th>Desconto</th><th>Vl.Desconto</th><th>Motivo</th><th>Obs</th></tr></thead><tbody>`;
+    <thead><tr>
+      <th>Rota</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th>
+      <th>Faltando</th><th>NF</th><th>Status Desc.</th><th>Vl. Desconto</th><th>Motivo</th><th>Comprovante</th>
+    </tr></thead><tbody>`;
   for (const r of rel.rotas) {
+    const info = STATUS_INFO[r.status_desconto] || { label: r.status_desconto || '—', icon: '•', cor: '#999' };
     html += `<tr>
-      <td>${r.numero_rota}</td>
-      <td>${r.motorista_nome||'—'}</td>
-      <td>${r.ajudante_nome||'—'}</td>
-      <td>${r.qtd_saiu}</td>
-      <td>${r.qtd_entregou}</td>
-      <td>${r.qtd_devolveu}</td>
-      <td>R$ ${(+r.valor_recebido).toFixed(2)}</td>
-      <td>R$ ${(+r.valor_esperado).toFixed(2)}</td>
-      <td>${r.mercadorias_faltando||'—'}</td>
-      <td>${r.desconto_equipe ? '<span class="badge badge-desconto">SIM</span>' : 'Não'}</td>
-      <td>${r.valor_desconto > 0 ? `<span class="text-danger fw-bold">R$ ${(+r.valor_desconto).toFixed(2)}</span>` : '—'}</td>
-      <td>${r.motivo_desconto||'—'}</td>
-      <td>${r.observacoes||'—'}</td>
+      <td class="fw-bold">${r.numero_rota}</td>
+      <td>${r.numero_f1 || '—'}</td>
+      <td>${r.motorista_nome || '—'}</td>
+      <td>${r.ajudante_nome  || '—'}</td>
+      <td>${r.ajudante2_nome || '—'}</td>
+      <td>${r.mercadorias_faltando || '—'}</td>
+      <td>${r.nf_url ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm py-0"><i class="bi bi-file-earmark-text me-1"></i>Ver</a>` : '—'}</td>
+      <td><span style="color:${info.cor};font-weight:600">${info.icon} ${info.label}</span></td>
+      <td class="text-danger fw-bold">${+r.valor_desconto > 0 ? fmtBRL(r.valor_desconto) : '—'}</td>
+      <td>${r.motivo_desconto || '—'}</td>
+      <td>${r.comprovante_url ? `<a href="${r.comprovante_url}" target="_blank" class="btn btn-outline-primary btn-sm py-0"><i class="bi bi-receipt me-1"></i>Ver</a>` : '—'}</td>
     </tr>`;
   }
   html += '</tbody></table></div>';

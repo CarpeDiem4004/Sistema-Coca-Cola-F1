@@ -40,7 +40,218 @@ router.get('/', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
-// ── Detalhe de um relatório (com rotas) ──────────────────────────────────────
+// ── Dashboard resumido (admin) ────────────────────────────────────────────────
+// IMPORTANTE: rotas com segmentos fixos devem vir ANTES de /:id
+router.get('/dashboard/resumo', auth, async (req, res) => {
+  if (!req.session.isAdmin) return res.status(403).json({ erro: 'Sem permissão.' });
+  try {
+    const { data } = req.query;
+    const dataRef  = data || new Date().toISOString().slice(0, 10);
+
+    const bases = await db.all(
+      "SELECT * FROM bases WHERE (is_admin = 0 OR is_admin IS NULL) AND ativo = 1"
+    );
+
+    const resultado = await Promise.all(bases.map(async (b) => {
+      const rel = await db.get(`
+        SELECT r.*,
+               COUNT(rt.id) as total_rotas,
+               SUM(rt.desconto_equipe) as total_descontos
+        FROM relatorios r
+        LEFT JOIN rotas rt ON rt.relatorio_id = r.id
+        WHERE r.base_id = ? AND r.data_referencia = ?
+        GROUP BY r.id
+      `, [b.id, dataRef]);
+
+      return {
+        base_id:    b.id,
+        base_nome:  b.nome,
+        cidade:     b.cidade,
+        postou:     !!rel?.id,
+        postado_em: rel?.postado_em || null,
+        relatorio:  rel?.id ? rel : null
+      };
+    }));
+
+    res.json({ data: dataRef, bases: resultado });
+  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
+// ── Stats / Mini-dash da base ─────────────────────────────────────────────────
+router.get('/stats/base', auth, async (req, res) => {
+  try {
+    const baseId = req.session.isAdmin ? (req.query.base_id || null) : req.session.userId;
+    if (!baseId) return res.status(400).json({ erro: 'base_id obrigatório para admin.' });
+
+    // Totais gerais
+    const totais = await db.pool.query(`
+      SELECT
+        COUNT(DISTINCT r.id)                          AS total_relatorios,
+        COUNT(rt.id)                                  AS total_rotas,
+        COUNT(rt.id) FILTER (WHERE rt.status_desconto NOT IN ('nenhum','abonar')) AS total_descontos,
+        COALESCE(SUM(rt.valor_desconto) FILTER (WHERE rt.status_desconto NOT IN ('nenhum','abonar')), 0) AS total_valor_desconto
+      FROM relatorios r
+      LEFT JOIN rotas rt ON rt.relatorio_id = r.id
+      WHERE r.base_id = $1
+    `, [baseId]);
+
+    // Últimos 6 meses
+    const porMes = await db.pool.query(`
+      SELECT
+        TO_CHAR(r.data_referencia, 'YYYY-MM') AS mes,
+        COUNT(DISTINCT r.id)                  AS relatorios,
+        COUNT(rt.id)                          AS rotas,
+        COALESCE(SUM(rt.valor_desconto) FILTER (WHERE rt.status_desconto NOT IN ('nenhum','abonar')), 0) AS valor_desconto
+      FROM relatorios r
+      LEFT JOIN rotas rt ON rt.relatorio_id = r.id
+      WHERE r.base_id = $1
+        AND r.data_referencia >= CURRENT_DATE - INTERVAL '6 months'
+      GROUP BY mes
+      ORDER BY mes DESC
+    `, [baseId]);
+
+    // Ranking motoristas (top 10 por rotas)
+    const rankMotoristas = await db.pool.query(`
+      SELECT
+        f.id,
+        f.nome,
+        f.cpf,
+        COUNT(rt.id)                          AS total_rotas,
+        COALESCE(SUM(rt.valor_desconto) FILTER (WHERE rt.status_desconto = 'motorista'), 0) AS total_desconto
+      FROM rotas rt
+      JOIN relatorios r ON r.id = rt.relatorio_id
+      JOIN funcionarios f ON f.id = rt.motorista_id
+      WHERE r.base_id = $1
+      GROUP BY f.id, f.nome, f.cpf
+      ORDER BY total_rotas DESC
+      LIMIT 10
+    `, [baseId]);
+
+    // Ranking ajudantes (top 10 por rotas)
+    const rankAjudantes = await db.pool.query(`
+      SELECT
+        f.id,
+        f.nome,
+        f.cpf,
+        COUNT(rt.id) AS total_rotas
+      FROM (
+        SELECT ajudante_id AS fid, relatorio_id FROM rotas WHERE ajudante_id IS NOT NULL
+        UNION ALL
+        SELECT ajudante2_id AS fid, relatorio_id FROM rotas WHERE ajudante2_id IS NOT NULL
+      ) aj
+      JOIN relatorios r ON r.id = aj.relatorio_id
+      JOIN funcionarios f ON f.id = aj.fid
+      WHERE r.base_id = $1
+      GROUP BY f.id, f.nome, f.cpf
+      ORDER BY total_rotas DESC
+      LIMIT 10
+    `, [baseId]);
+
+    // Breakdown por status de desconto
+    const statusDescontos = await db.pool.query(`
+      SELECT
+        rt.status_desconto,
+        COUNT(*)                            AS quantidade,
+        COALESCE(SUM(rt.valor_desconto), 0) AS valor_total
+      FROM rotas rt
+      JOIN relatorios r ON r.id = rt.relatorio_id
+      WHERE r.base_id = $1
+      GROUP BY rt.status_desconto
+    `, [baseId]);
+
+    res.json({
+      totais:         totais.rows[0],
+      porMes:         porMes.rows,
+      rankMotoristas: rankMotoristas.rows,
+      rankAjudantes:  rankAjudantes.rows,
+      statusDescontos: statusDescontos.rows
+    });
+  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
+// ── Busca funcionário por nome ou CPF ─────────────────────────────────────────
+router.get('/stats/funcionario', auth, async (req, res) => {
+  try {
+    const baseId = req.session.isAdmin ? (req.query.base_id || null) : req.session.userId;
+    const { busca } = req.query;
+    if (!busca) return res.status(400).json({ erro: 'Parâmetro busca obrigatório.' });
+
+    const term = `%${busca}%`;
+    const baseFilter = baseId ? 'AND r.base_id = $3' : '';
+    const params = baseId ? [term, term, baseId] : [term, term];
+
+    const funcResult = await db.pool.query(`
+      SELECT DISTINCT f.id, f.nome, f.cpf, f.cargo
+      FROM funcionarios f
+      JOIN (
+        SELECT motorista_id AS fid, relatorio_id FROM rotas WHERE motorista_id IS NOT NULL
+        UNION
+        SELECT ajudante_id  AS fid, relatorio_id FROM rotas WHERE ajudante_id  IS NOT NULL
+        UNION
+        SELECT ajudante2_id AS fid, relatorio_id FROM rotas WHERE ajudante2_id IS NOT NULL
+      ) rel ON rel.fid = f.id
+      JOIN relatorios r ON r.id = rel.relatorio_id
+      WHERE (LOWER(f.nome) LIKE LOWER($1) OR f.cpf LIKE $2)
+      ${baseFilter}
+      LIMIT 20
+    `, params);
+
+    if (funcResult.rows.length === 0) return res.json({ funcionarios: [], rotas: [] });
+
+    const ids = funcResult.rows.map(f => f.id);
+    const ph  = ids.map((_, i) => `$${i + 1}`).join(',');
+    const baseFilterRotas = baseId ? `AND r.base_id = $${ids.length + 1}` : '';
+    const paramsRotas = baseId ? [...ids, baseId] : ids;
+
+    const rotasResult = await db.pool.query(`
+      SELECT
+        rt.id, rt.numero_rota, rt.numero_f1,
+        rt.status_desconto, rt.valor_desconto, rt.motivo_desconto,
+        r.data_referencia, b.nome AS base_nome,
+        m.id  AS mot_id,  m.nome  AS motorista_nome,
+        a.id  AS aj1_id,  a.nome  AS ajudante_nome,
+        a2.id AS aj2_id,  a2.nome AS ajudante2_nome
+      FROM rotas rt
+      JOIN relatorios r  ON r.id  = rt.relatorio_id
+      JOIN bases b        ON b.id  = r.base_id
+      LEFT JOIN funcionarios m  ON m.id  = rt.motorista_id
+      LEFT JOIN funcionarios a  ON a.id  = rt.ajudante_id
+      LEFT JOIN funcionarios a2 ON a2.id = rt.ajudante2_id
+      WHERE (rt.motorista_id IN (${ph})
+          OR rt.ajudante_id  IN (${ph})
+          OR rt.ajudante2_id IN (${ph}))
+      ${baseFilterRotas}
+      ORDER BY r.data_referencia DESC
+      LIMIT 100
+    `, paramsRotas);
+
+    res.json({ funcionarios: funcResult.rows, rotas: rotasResult.rows });
+  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
+// ── Alertas ───────────────────────────────────────────────────────────────────
+router.get('/alertas/pendentes', auth, async (req, res) => {
+  if (!req.session.isAdmin) return res.status(403).json({ erro: 'Sem permissão.' });
+  try {
+    const alertas = await db.all(`
+      SELECT a.*, b.nome as base_nome, b.cidade
+      FROM alertas a JOIN bases b ON b.id = a.base_id
+      WHERE a.lido = 0
+      ORDER BY a.criado_em DESC
+    `);
+    res.json(alertas);
+  } catch (err) { res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
+router.put('/alertas/:id/lido', auth, async (req, res) => {
+  if (!req.session.isAdmin) return res.status(403).json({ erro: 'Sem permissão.' });
+  try {
+    await db.run('UPDATE alertas SET lido = 1 WHERE id = ?', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
+// ── Detalhe de um relatório (com rotas) ── DEVE VIR POR ÚLTIMO ───────────────
 router.get('/:id', auth, async (req, res) => {
   try {
     const rel = await db.get(`
@@ -54,10 +265,13 @@ router.get('/:id', auth, async (req, res) => {
       return res.status(403).json({ erro: 'Sem permissão.' });
 
     const rotas = await db.all(`
-      SELECT rt.*, m.nome as motorista_nome, a.nome as ajudante_nome, a2.nome as ajudante2_nome
+      SELECT rt.*,
+             m.nome  as motorista_nome,
+             a.nome  as ajudante_nome,
+             a2.nome as ajudante2_nome
       FROM rotas rt
-      LEFT JOIN funcionarios m ON m.id = rt.motorista_id
-      LEFT JOIN funcionarios a ON a.id = rt.ajudante_id
+      LEFT JOIN funcionarios m  ON m.id  = rt.motorista_id
+      LEFT JOIN funcionarios a  ON a.id  = rt.ajudante_id
       LEFT JOIN funcionarios a2 ON a2.id = rt.ajudante2_id
       WHERE rt.relatorio_id = ?
       ORDER BY rt.numero_rota
@@ -119,68 +333,6 @@ router.post('/', auth, async (req, res) => {
 
     res.json({ id: relId, ok: true });
   } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
-});
-
-// ── Dashboard resumido (admin) ────────────────────────────────────────────────
-router.get('/dashboard/resumo', auth, async (req, res) => {
-  if (!req.session.isAdmin) return res.status(403).json({ erro: 'Sem permissão.' });
-  try {
-    const { data } = req.query;
-    const dataRef  = data || new Date().toISOString().slice(0, 10);
-
-    const bases = await db.all(
-      "SELECT * FROM bases WHERE (is_admin = 0 OR is_admin IS NULL) AND ativo = 1"
-    );
-
-    const resultado = await Promise.all(bases.map(async (b) => {
-      const rel = await db.get(`
-        SELECT r.*, COUNT(rt.id) as total_rotas,
-               SUM(rt.qtd_saiu) as total_saiu,
-               SUM(rt.qtd_entregou) as total_entregou,
-               SUM(rt.qtd_devolveu) as total_devolveu,
-               SUM(rt.valor_recebido) as total_recebido,
-               SUM(rt.valor_esperado) as total_esperado,
-               SUM(rt.desconto_equipe) as total_descontos
-        FROM relatorios r
-        LEFT JOIN rotas rt ON rt.relatorio_id = r.id
-        WHERE r.base_id = ? AND r.data_referencia = ?
-        GROUP BY r.id
-      `, [b.id, dataRef]);
-
-      return {
-        base_id:    b.id,
-        base_nome:  b.nome,
-        cidade:     b.cidade,
-        postou:     !!rel?.id,
-        postado_em: rel?.postado_em || null,
-        relatorio:  rel?.id ? rel : null
-      };
-    }));
-
-    res.json({ data: dataRef, bases: resultado });
-  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
-});
-
-// ── Alertas ───────────────────────────────────────────────────────────────────
-router.get('/alertas/pendentes', auth, async (req, res) => {
-  if (!req.session.isAdmin) return res.status(403).json({ erro: 'Sem permissão.' });
-  try {
-    const alertas = await db.all(`
-      SELECT a.*, b.nome as base_nome, b.cidade
-      FROM alertas a JOIN bases b ON b.id = a.base_id
-      WHERE a.lido = 0
-      ORDER BY a.criado_em DESC
-    `);
-    res.json(alertas);
-  } catch (err) { res.status(500).json({ erro: 'Erro interno.' }); }
-});
-
-router.put('/alertas/:id/lido', auth, async (req, res) => {
-  if (!req.session.isAdmin) return res.status(403).json({ erro: 'Sem permissão.' });
-  try {
-    await db.run('UPDATE alertas SET lido = 1 WHERE id = ?', [req.params.id]);
-    res.json({ ok: true });
-  } catch (err) { res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
 module.exports = router;

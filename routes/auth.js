@@ -9,24 +9,45 @@ router.post('/login', async (req, res) => {
     if (!usuario || !senha)
       return res.status(400).json({ erro: 'Usuário e senha obrigatórios.' });
 
-    // 1. Tentar como base ou admin
+    // 1. Tentar como base ou admin (CEO)
     const base = await db.get('SELECT * FROM bases WHERE usuario = $1 AND ativo = 1', [usuario]);
     if (base && bcrypt.compareSync(senha, base.senha)) {
       req.session.userId     = base.id;
       req.session.usuario    = base.usuario;
       req.session.nome       = base.nome;
       req.session.isAdmin    = !!base.is_admin;
+      req.session.isCeo      = !!base.is_admin;   // CEO = admin principal da bases
       req.session.operadorId = null;
 
       return res.json({
         id:      base.id,
         nome:    base.nome,
         usuario: base.usuario,
-        isAdmin: !!base.is_admin
+        isAdmin: !!base.is_admin,
+        isCeo:   !!base.is_admin
       });
     }
 
-    // 2. Tentar como operador
+    // 2. Tentar como gerente
+    const gerente = await db.get('SELECT * FROM gerentes WHERE usuario = $1 AND ativo = 1', [usuario]);
+    if (gerente && bcrypt.compareSync(senha, gerente.senha_hash)) {
+      req.session.userId     = gerente.id;
+      req.session.usuario    = gerente.usuario;
+      req.session.nome       = gerente.nome;
+      req.session.isAdmin    = true;
+      req.session.isCeo      = false;             // Gerente NÃO é CEO
+      req.session.operadorId = null;
+
+      return res.json({
+        id:      gerente.id,
+        nome:    gerente.nome,
+        usuario: gerente.usuario,
+        isAdmin: true,
+        isCeo:   false
+      });
+    }
+
+    // 3. Tentar como operador de base
     const op = await db.get(`
       SELECT o.*, b.nome as base_nome, b.ativo as base_ativa
       FROM operadores o JOIN bases b ON b.id = o.base_id
@@ -41,13 +62,15 @@ router.post('/login', async (req, res) => {
       req.session.usuario    = op.usuario;
       req.session.nome       = `${op.nome} (${op.base_nome})`;
       req.session.isAdmin    = false;
+      req.session.isCeo      = false;
       req.session.operadorId = op.id;
 
       return res.json({
         id:      op.base_id,
         nome:    `${op.nome} (${op.base_nome})`,
         usuario: op.usuario,
-        isAdmin: false
+        isAdmin: false,
+        isCeo:   false
       });
     }
 
@@ -70,6 +93,7 @@ router.get('/me', (req, res) => {
     nome:       req.session.nome,
     usuario:    req.session.usuario,
     isAdmin:    !!req.session.isAdmin,
+    isCeo:      !!req.session.isCeo,
     operadorId: req.session.operadorId || null
   });
 });

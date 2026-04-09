@@ -54,6 +54,7 @@
     <button class="nav-tab-btn" onclick="showTab('relatorios', this)"><i class="bi bi-file-earmark-text me-1"></i>Relatórios</button>
     <button class="nav-tab-btn" onclick="showTab('bases', this)"><i class="bi bi-building me-1"></i>Bases</button>
     <button class="nav-tab-btn" onclick="showTab('alertas', this)" id="tabBtnAlertas"><i class="bi bi-exclamation-triangle me-1"></i>Alertas</button>
+    <button class="nav-tab-btn d-none" onclick="showTab('gerentes', this)" id="tabBtnGerentes"><i class="bi bi-shield-lock me-1"></i>Gerentes</button>
   </div>
 
   <!-- ════════════ DASHBOARD ════════════ -->
@@ -74,15 +75,9 @@
         </div>
       </div>
       <div class="col-md-3">
-        <div class="stat-box bg-primary bg-opacity-10 border border-primary">
-          <div class="stat-num text-primary" id="totalEntregou">—</div>
-          <div class="text-muted small">Total entregas (todas bases)</div>
-        </div>
-      </div>
-      <div class="col-md-3">
         <div class="stat-box bg-warning bg-opacity-10 border border-warning">
-          <div class="stat-num text-warning" id="totalRecebido">—</div>
-          <div class="text-muted small">Total recebido (R$)</div>
+          <div class="stat-num text-warning" id="totalDesconto">—</div>
+          <div class="text-muted small">Total desconto (R$)</div>
         </div>
       </div>
     </div>
@@ -141,6 +136,25 @@
   <div id="tab-alertas" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
     <h5 class="fw-bold mb-3"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Alertas – Bases sem Relatório</h5>
     <div id="listaAlertas"></div>
+  </div>
+
+  <!-- ════════════ GERENTES ════════════ -->
+  <div id="tab-gerentes" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="fw-bold mb-0"><i class="bi bi-shield-lock text-danger me-2"></i>Gerentes do Sistema</h5>
+      <button class="btn btn-red btn-sm" data-bs-toggle="modal" data-bs-target="#modalGerente">
+        <i class="bi bi-person-plus me-1"></i>Novo Gerente
+      </button>
+    </div>
+    <div class="alert alert-info small mb-3">
+      <i class="bi bi-info-circle-fill me-2"></i>
+      Gerentes têm acesso completo ao painel da diretoria (Dashboard, Relatórios, Bases, Alertas),
+      mas <strong>não podem</strong> criar ou excluir outros gerentes.
+    </div>
+    <table class="table table-bordered table-hover">
+      <thead><tr><th>Nome</th><th>Usuário</th><th>Status</th><th>Criado em</th><th></th></tr></thead>
+      <tbody id="tbGerentes"></tbody>
+    </table>
   </div>
 
 </div>
@@ -230,6 +244,37 @@
   </div>
 </div>
 
+<!-- Modal: novo gerente -->
+<div class="modal fade" id="modalGerente" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cc-red)">
+        <h5 class="modal-title text-white fw-bold"><i class="bi bi-shield-lock me-2"></i>Novo Gerente</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="alertaGerente" class="alert d-none"></div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nome completo *</label>
+          <input type="text" id="gNome" class="form-control" placeholder="Ex: João Silva" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Usuário de acesso *</label>
+          <input type="text" id="gUsuario" class="form-control" placeholder="Ex: joao.silva" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Senha *</label>
+          <input type="password" id="gSenha" class="form-control" placeholder="Mínimo 6 caracteres" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-red" onclick="criarGerente()"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: detalhe relatório -->
 <div class="modal fade" id="modalDetalhe" tabindex="-1">
   <div class="modal-dialog modal-xl">
@@ -246,11 +291,26 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 let basesCache = [];
+let isCeo = false;
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
   const me = await fetch('/api/auth/me').then(r => r.json()).catch(() => null);
   if (!me || me.erro || !me.isAdmin) { window.location.href = '/'; return; }
+
+  isCeo = !!me.isCeo;
+
+  // Mostrar aba Gerentes apenas para CEO
+  if (isCeo) {
+    document.getElementById('tabBtnGerentes').classList.remove('d-none');
+  }
+
+  // Mostrar nome do usuário na navbar
+  document.querySelector('.navbar-brand').innerHTML =
+    `<i class="bi bi-bar-chart-fill me-2"></i>Coca-Cola F1 – Diretoria
+     <span class="badge ms-2 ${isCeo ? 'bg-warning text-dark' : 'bg-light text-danger'}" style="font-size:.7rem">
+       ${isCeo ? '👑 CEO' : '🧑‍💼 Gerente'}
+     </span>`;
 
   const hoje = new Date(); hoje.setDate(hoje.getDate() - 1);
   document.getElementById('dataFiltro').value = hoje.toISOString().slice(0, 10);
@@ -268,7 +328,8 @@ function showTab(tab, btn) {
   document.getElementById('tab-' + tab).classList.add('active');
   if (btn) btn.classList.add('active');
   else document.getElementById('tabBtnAlertas').classList.add('active');
-  if (tab === 'alertas') carregarAlertas();
+  if (tab === 'alertas')  carregarAlertas();
+  if (tab === 'gerentes') carregarGerentes();
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -454,9 +515,9 @@ async function carregarBases() {
         <button class="btn btn-outline-secondary btn-sm" onclick="toggleBase(${b.id}, ${b.ativo})">
           <i class="bi bi-${b.ativo ? 'pause-circle' : 'play-circle'} me-1"></i>${b.ativo ? 'Desativar' : 'Ativar'}
         </button>
-        <button class="btn btn-danger btn-sm" onclick="excluirBase(${b.id}, '${b.nome.replace(/'/g, "\\'")}')">
+        ${isCeo ? `<button class="btn btn-danger btn-sm" onclick="excluirBase(${b.id}, '${b.nome.replace(/'/g, "\\'")}')">
           <i class="bi bi-trash-fill me-1"></i>Excluir
-        </button>
+        </button>` : ''}
       </td>
     </tr>`).join('');
 }
@@ -640,6 +701,66 @@ async function carregarAlertas() {
 async function marcarLido(id) {
   await fetch(`/api/relatorios/alertas/${id}/lido`, { method:'PUT' });
   await carregarAlertas();
+}
+
+// ── Gerentes ──────────────────────────────────────────────────────────────────
+async function carregarGerentes() {
+  const rows = await fetch('/api/gerentes').then(r => r.json());
+  const tb   = document.getElementById('tbGerentes');
+  tb.innerHTML = rows.length === 0
+    ? '<tr><td colspan="5" class="text-center text-muted">Nenhum gerente cadastrado</td></tr>'
+    : rows.map(g => `
+        <tr>
+          <td><strong>${g.nome}</strong></td>
+          <td><code>${g.usuario}</code></td>
+          <td><span class="badge ${g.ativo ? 'bg-success' : 'bg-secondary'}">${g.ativo ? 'Ativo' : 'Inativo'}</span></td>
+          <td><small class="text-muted">${new Date(g.criado_em).toLocaleDateString('pt-BR')}</small></td>
+          <td class="d-flex gap-1">
+            <button class="btn btn-outline-secondary btn-sm" onclick="toggleGerente(${g.id}, ${g.ativo})">
+              <i class="bi bi-${g.ativo ? 'pause-circle' : 'play-circle'} me-1"></i>${g.ativo ? 'Desativar' : 'Ativar'}
+            </button>
+            <button class="btn btn-outline-danger btn-sm" onclick="excluirGerente(${g.id}, '${g.nome.replace(/'/g,"\\'")}')">
+              <i class="bi bi-trash me-1"></i>Excluir
+            </button>
+          </td>
+        </tr>`).join('');
+}
+
+async function criarGerente() {
+  const nome    = document.getElementById('gNome').value.trim();
+  const usuario = document.getElementById('gUsuario').value.trim();
+  const senha   = document.getElementById('gSenha').value;
+  const alerta  = document.getElementById('alertaGerente');
+
+  if (!nome || !usuario || !senha) {
+    alerta.className = 'alert alert-danger'; alerta.textContent = 'Preencha todos os campos.'; return;
+  }
+  if (senha.length < 6) {
+    alerta.className = 'alert alert-danger'; alerta.textContent = 'Senha mínima de 6 caracteres.'; return;
+  }
+
+  const res  = await fetch('/api/gerentes', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nome, usuario, senha}) });
+  const data = await res.json();
+  if (!res.ok) { alerta.className='alert alert-danger'; alerta.textContent=data.erro; return; }
+
+  alerta.className = 'alert alert-success'; alerta.textContent = 'Gerente criado com sucesso!';
+  document.getElementById('gNome').value = '';
+  document.getElementById('gUsuario').value = '';
+  document.getElementById('gSenha').value = '';
+  await carregarGerentes();
+  setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('modalGerente')).hide(), 1200);
+}
+
+async function toggleGerente(id, ativo) {
+  await fetch(`/api/gerentes/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ativo: ativo ? 0 : 1 }) });
+  await carregarGerentes();
+}
+
+async function excluirGerente(id, nome) {
+  if (!confirm(`Excluir o gerente "${nome}"? Esta ação não pode ser desfeita.`)) return;
+  const res = await fetch(`/api/gerentes/${id}`, { method:'DELETE' });
+  if (!res.ok) { const d = await res.json(); alert(d.erro); return; }
+  await carregarGerentes();
 }
 
 async function logout() {
