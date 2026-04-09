@@ -336,11 +336,26 @@ function atualizarStatusDesconto(card) {
   const painel   = card.querySelector('.painel-status-desconto');
   const comprov  = card.querySelector('.painel-comprovante');
   const label    = card.querySelector('.inp-label-motivo');
+  const compFile = card.querySelector('.inp-comp-file');
 
   // Mostrar/ocultar painel de justificativa
   const precisaJustif = ['motorista','equipe','abonar','regularizado','pago'].includes(status);
   painel.classList.toggle('d-none', !precisaJustif || status === 'nenhum');
   comprov.classList.toggle('d-none', status !== 'pago');
+
+  // Comprovante obrigatório para "pago"
+  if (compFile) {
+    compFile.required = (status === 'pago');
+    const aviso = card.querySelector('.aviso-comprovante');
+    if (status === 'pago') {
+      if (!aviso) {
+        const span = document.createElement('small');
+        span.className = 'aviso-comprovante text-danger fw-semibold';
+        span.textContent = '⚠️ Comprovante obrigatório para salvar';
+        compFile.parentElement.appendChild(span);
+      }
+    } else if (aviso) aviso.remove();
+  }
 
   // Labels contextuais
   const labels = {
@@ -454,6 +469,26 @@ async function enviarRelatorio() {
   });
 
   if (rotas.some(r => !r.numero_rota)) { mostrarAlerta(alerta, 'danger', 'Preencha o número de todas as rotas.'); return; }
+
+  // Validar: status "pago" exige comprovante
+  const semComprovante = rotas
+    .map((r, i) => ({ ...r, idx: i + 1 }))
+    .filter(r => r.status_desconto === 'pago' && !r.comprovante_url);
+  if (semComprovante.length > 0) {
+    const nums = semComprovante.map(r => `Rota #${r.idx} (${r.numero_rota||'?'})`).join(', ');
+    mostrarAlerta(alerta, 'danger', `Status "Pago" exige comprovante anexado: ${nums}`);
+    return;
+  }
+
+  // Validar: status que exigem justificativa
+  const semMotivo = rotas
+    .map((r, i) => ({ ...r, idx: i + 1 }))
+    .filter(r => ['motorista','equipe','abonar','regularizado'].includes(r.status_desconto) && !r.motivo_desconto);
+  if (semMotivo.length > 0) {
+    const nums = semMotivo.map(r => `Rota #${r.idx}`).join(', ');
+    mostrarAlerta(alerta, 'danger', `Justificativa obrigatória para: ${nums}`);
+    return;
+  }
 
   const res  = await fetch('/api/relatorios', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data_referencia: dataRef, rotas }) });
   const data = await res.json();
