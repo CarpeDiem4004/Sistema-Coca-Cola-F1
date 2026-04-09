@@ -1,10 +1,18 @@
--- ============================================================
--- Coca-Cola F1 – Schema para Supabase (PostgreSQL)
--- Execute este script no SQL Editor do Supabase
--- ============================================================
+-- ================================================================
+-- Coca-Cola F1 – Setup COMPLETO para Supabase
+-- Cole TUDO isso no SQL Editor do Supabase e clique em RUN
+-- ================================================================
 
--- Bases (cada filial + admin)
-CREATE TABLE IF NOT EXISTS bases (
+-- 1. Remover tabelas antigas (se existirem) na ordem correta
+DROP TABLE IF EXISTS alertas CASCADE;
+DROP TABLE IF EXISTS rotas CASCADE;
+DROP TABLE IF EXISTS relatorios CASCADE;
+DROP TABLE IF EXISTS funcionarios CASCADE;
+DROP TABLE IF EXISTS operadores CASCADE;
+DROP TABLE IF EXISTS bases CASCADE;
+
+-- 2. Criar tabelas
+CREATE TABLE bases (
   id         SERIAL PRIMARY KEY,
   nome       TEXT NOT NULL,
   usuario    TEXT UNIQUE NOT NULL,
@@ -15,8 +23,7 @@ CREATE TABLE IF NOT EXISTS bases (
   criado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Operadores vinculados a cada base
-CREATE TABLE IF NOT EXISTS operadores (
+CREATE TABLE operadores (
   id         SERIAL PRIMARY KEY,
   base_id    INTEGER NOT NULL REFERENCES bases(id),
   nome       TEXT NOT NULL,
@@ -26,8 +33,7 @@ CREATE TABLE IF NOT EXISTS operadores (
   criado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Funcionários (motoristas e ajudantes) de cada base
-CREATE TABLE IF NOT EXISTS funcionarios (
+CREATE TABLE funcionarios (
   id         SERIAL PRIMARY KEY,
   base_id    INTEGER NOT NULL REFERENCES bases(id),
   nome       TEXT NOT NULL,
@@ -37,8 +43,7 @@ CREATE TABLE IF NOT EXISTS funcionarios (
   criado_em  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Relatórios diários
-CREATE TABLE IF NOT EXISTS relatorios (
+CREATE TABLE relatorios (
   id               SERIAL PRIMARY KEY,
   base_id          INTEGER NOT NULL REFERENCES bases(id),
   data_referencia  TEXT NOT NULL,
@@ -46,8 +51,7 @@ CREATE TABLE IF NOT EXISTS relatorios (
   status           TEXT DEFAULT 'enviado'
 );
 
--- Rotas de entrega dentro de cada relatório
-CREATE TABLE IF NOT EXISTS rotas (
+CREATE TABLE rotas (
   id                    SERIAL PRIMARY KEY,
   relatorio_id          INTEGER NOT NULL REFERENCES relatorios(id),
   numero_rota           TEXT NOT NULL,
@@ -65,8 +69,7 @@ CREATE TABLE IF NOT EXISTS rotas (
   observacoes           TEXT
 );
 
--- Alertas de bases que não postaram
-CREATE TABLE IF NOT EXISTS alertas (
+CREATE TABLE alertas (
   id               SERIAL PRIMARY KEY,
   base_id          INTEGER NOT NULL REFERENCES bases(id),
   data_referencia  TEXT NOT NULL,
@@ -76,8 +79,15 @@ CREATE TABLE IF NOT EXISTS alertas (
   criado_em        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- ── Usuário admin inicial (senha: admin123) ──────────────────────────────────
--- bcrypt hash de "admin123"
-INSERT INTO bases (nome, usuario, senha, cidade, is_admin)
-VALUES ('DIRETORIA', 'admin', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Central', 1)
-ON CONFLICT (usuario) DO NOTHING;
+-- 3. Inserir usuários com senhas corretas
+INSERT INTO bases (nome, usuario, senha, cidade, is_admin) VALUES
+  ('DIRETORIA',              'admin',                               '$2b$10$f0GVRoXsjXbk0Ki9T2Dq9eJPkDpjckL4RdDfi2awdpNAQvhSM.Ebu', 'Central',         1),
+  ('João Paulo – Master',    'joao.paulo@timingtransportes.com.br', '$2b$10$VMQyfzyfmd681B7hOSc6AuqVYzLP1ARWXNowxE3RsgaATzEj67f5S', 'Central',         1),
+  ('Base São Paulo',         'base_sp',                             '$2b$10$cVPUp9tveDrzJV7.tYtXyev3NfhClzSij2p0nDRrwZb7iae1OgkeO', 'São Paulo',        0),
+  ('Base Rio de Janeiro',    'base_rj',                             '$2b$10$Kj8zy9/.pj9MQa2jGB7j5eeouSvWHkA9Hqeo/Zit3s1DbtGXPEpnW', 'Rio de Janeiro',   0),
+  ('Base Belo Horizonte',    'base_bh',                             '$2b$10$s2xT4xEiwqpvIitQ4TPsbOGlvhd8c3n8JVQPAIXDysbwX3sDzXzXW', 'Belo Horizonte',   0),
+  ('Base Brasília',          'base_bsb',                            '$2b$10$rOh4efQdn/Scp7StAcJq0e3BgRHkCuQYRXC6LX3EcwnDIN4c3SQI.', 'Brasília',         0),
+  ('Base Salvador',          'base_ssa',                            '$2b$10$zqOhBj3HumznxZF1maj96.7vKJndY1PujZrkVALfYiMktIkLAx9cy', 'Salvador',         0);
+
+-- Verificar
+SELECT id, nome, usuario, is_admin, ativo FROM bases ORDER BY id;

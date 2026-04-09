@@ -19,6 +19,26 @@ app.use(session({
   cookie: { maxAge: 8 * 60 * 60 * 1000 } // 8 horas
 }));
 
+// ── Health check / diagnóstico ────────────────────────────────────────────────
+app.get('/api/health', async (req, res) => {
+  try {
+    const result = await db.pool.query('SELECT COUNT(*) as total FROM bases');
+    res.json({
+      status: 'ok',
+      db: 'conectado',
+      bases: result.rows[0].total,
+      database_url: process.env.DATABASE_URL ? 'configurada' : 'AUSENTE'
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: 'erro',
+      db: 'falhou',
+      mensagem: err.message,
+      database_url: process.env.DATABASE_URL ? 'configurada' : 'AUSENTE'
+    });
+  }
+});
+
 // ── Rotas da API ──────────────────────────────────────────────────────────────
 app.use('/api/auth',         require('./routes/auth'));
 app.use('/api/funcionarios', require('./routes/funcionarios'));
