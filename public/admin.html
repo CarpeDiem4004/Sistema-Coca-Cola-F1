@@ -365,6 +365,19 @@ async function verRelatorioBase(baseId) {
   if (rels.length > 0) verDetalhe(rels[0].id);
 }
 
+function badgeStatus(status, valor) {
+  const cfg = {
+    motorista:    { cor: 'danger',   icon: 'truck',         label: 'Desc. Motorista' },
+    equipe:       { cor: 'warning',  icon: 'people-fill',   label: 'Desc. Equipe'    },
+    abonar:       { cor: 'success',  icon: 'check-circle',  label: 'Abonado'         },
+    regularizado: { cor: 'info',     icon: 'arrow-repeat',  label: 'Regularizado'    },
+    pago:         { cor: 'primary',  icon: 'credit-card',   label: 'Pago'            },
+    nenhum:       { cor: 'secondary',icon: 'dash-circle',   label: 'Sem desconto'    },
+  };
+  const c = cfg[status] || cfg['nenhum'];
+  return `<span class="badge bg-${c.cor}"><i class="bi bi-${c.icon} me-1"></i>${c.label}</span>`;
+}
+
 async function verDetalhe(id) {
   const rel = await fetch(`/api/relatorios/${id}`).then(r => r.json());
   let html  = `
@@ -395,7 +408,7 @@ async function verDetalhe(id) {
   html += `<div class="table-responsive"><table class="table table-bordered table-sm align-middle">
     <thead><tr>
       <th>Rota</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th>
-      <th>Mercadorias Faltando</th><th>NF</th><th>Desconto</th><th>Vl.Desconto</th><th>Motivo/Obs</th>
+      <th>Mercadorias Faltando</th><th>NF</th><th>Status Desconto</th><th>Vl.Desconto</th><th>Motivo/Justificativa</th><th>Comprovante</th>
     </tr></thead><tbody>`;
 
   for (const r of rel.rotas) {
@@ -406,10 +419,11 @@ async function verDetalhe(id) {
       <td>${r.ajudante_nome||'—'}</td>
       <td>${r.ajudante2_nome||'—'}</td>
       <td>${r.mercadorias_faltando ? `<span class="text-danger">${r.mercadorias_faltando}</span>` : '—'}</td>
-      <td>${r.nf_url ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm"><i class="bi bi-paperclip"></i> Ver NF</a>` : '—'}</td>
-      <td>${r.desconto_equipe ? '<span class="badge bg-danger">SIM</span>' : '<span class="badge bg-success">Não</span>'}</td>
+      <td>${r.nf_url ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm py-0"><i class="bi bi-paperclip"></i> NF</a>` : '—'}</td>
+      <td>${badgeStatus(r.status_desconto, r.valor_desconto)}</td>
       <td>${r.valor_desconto > 0 ? `<span class="text-danger fw-bold">R$ ${(+r.valor_desconto).toFixed(2)}</span>` : '—'}</td>
       <td>${r.motivo_desconto||'—'}</td>
+      <td>${r.comprovante_url ? `<a href="${r.comprovante_url}" target="_blank" class="btn btn-outline-success btn-sm py-0"><i class="bi bi-receipt"></i> Ver</a>` : '—'}</td>
     </tr>`;
   }
   html += '</tbody></table></div>';

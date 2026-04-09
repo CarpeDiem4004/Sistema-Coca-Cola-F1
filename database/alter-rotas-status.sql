@@ -1,0 +1,2 @@
+ALTER TABLE rotas ADD COLUMN IF NOT EXISTS status_desconto TEXT DEFAULT 'nenhum';
+ALTER TABLE rotas ADD COLUMN IF NOT EXISTS comprovante_url TEXT;

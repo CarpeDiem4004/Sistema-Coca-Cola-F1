@@ -95,21 +95,23 @@ router.post('/', auth, async (req, res) => {
             (relatorio_id, numero_rota, numero_f1,
              motorista_id, ajudante_id, ajudante2_id,
              mercadorias_faltando, nf_url,
-             desconto_equipe, motivo_desconto, valor_desconto, observacoes)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             status_desconto, desconto_equipe,
+             valor_desconto, motivo_desconto, comprovante_url)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           rel.lastInsertRowid,
           r.numero_rota,
-          r.numero_f1       || null,
-          r.motorista_id    || null,
-          r.ajudante_id     || null,
-          r.ajudante2_id    || null,
+          r.numero_f1            || null,
+          r.motorista_id         || null,
+          r.ajudante_id          || null,
+          r.ajudante2_id         || null,
           r.mercadorias_faltando || null,
-          r.nf_url          || null,
-          r.desconto_equipe ? 1 : 0,
-          r.motivo_desconto || null,
-          r.valor_desconto  || 0,
-          r.observacoes     || null
+          r.nf_url               || null,
+          r.status_desconto      || 'nenhum',
+          r.desconto_equipe      || 0,
+          r.valor_desconto       || 0,
+          r.motivo_desconto      || null,
+          r.comprovante_url      || null
         ]);
       }
       return rel.lastInsertRowid;
