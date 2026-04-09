@@ -48,32 +48,70 @@ router.get('/dashboard/resumo', auth, async (req, res) => {
     const { data } = req.query;
     const dataRef  = data || new Date().toISOString().slice(0, 10);
 
+    // Horário limite: 10h (Brasília)
+    const horaLimite = 10;
+    const agora = new Date();
+    const horaAtual = agora.getHours();
+
     const bases = await db.all(
       "SELECT * FROM bases WHERE (is_admin = 0 OR is_admin IS NULL) AND ativo = 1"
     );
 
-    const resultado = await Promise.all(bases.map(async (b) => {
-      const rel = await db.get(`
-        SELECT r.*,
-               COUNT(rt.id) as total_rotas,
-               SUM(rt.desconto_equipe) as total_descontos
-        FROM relatorios r
-        LEFT JOIN rotas rt ON rt.relatorio_id = r.id
-        WHERE r.base_id = ? AND r.data_referencia = ?
-        GROUP BY r.id
-      `, [b.id, dataRef]);
+    // Buscar relatórios do dia
+    const relatorios = await db.all(
+      `SELECT r.*, b.nome as base_nome, b.cidade,
+              (SELECT SUM(rt.valor_desconto) FROM rotas rt WHERE rt.relatorio_id = r.id) as valor_total,
+              (SELECT COUNT(*) FROM rotas rt WHERE rt.relatorio_id = r.id AND rt.status_desconto NOT IN ('nenhum','abonar')) as ocorrencias
+         FROM relatorios r
+         JOIN bases b ON b.id = r.base_id
+        WHERE r.data_referencia = ?`,
+      [dataRef]
+    );
 
+    // Mapear relatórios por base
+    const relPorBase = {};
+    relatorios.forEach(r => { relPorBase[r.base_id] = r; });
+
+    // Montar lista de status das bases
+    const resultado = bases.map((b) => {
+      const rel = relPorBase[b.id];
       return {
         base_id:    b.id,
         base_nome:  b.nome,
         cidade:     b.cidade,
-        postou:     !!rel?.id,
+        postou:     !!rel,
         postado_em: rel?.postado_em || null,
-        relatorio:  rel?.id ? rel : null
+        valor_total: rel?.valor_total || 0,
+        ocorrencias: rel?.ocorrencias || 0,
+        relatorio:  rel || null
       };
-    }));
+    });
 
-    res.json({ data: dataRef, bases: resultado });
+    // Bases pendentes após 10h
+    const pendentes = (horaAtual >= horaLimite)
+      ? resultado.filter(b => !b.postou)
+      : [];
+
+    // Ranking de ocorrências e valores
+    const rankingOcorrencias = [...resultado]
+      .filter(b => b.ocorrencias > 0)
+      .sort((a, b) => b.ocorrencias - a.ocorrencias)
+      .slice(0, 5);
+
+    const rankingValores = [...resultado]
+      .filter(b => b.valor_total > 0)
+      .sort((a, b) => b.valor_total - a.valor_total)
+      .slice(0, 5);
+
+    res.json({
+      data: dataRef,
+      bases: resultado,
+      pendentes,
+      horaLimite,
+      horaAtual,
+      rankingOcorrencias,
+      rankingValores
+    });
   } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
