@@ -10,7 +10,34 @@ function auth(req, res, next) {
 // Listar funcionários
 router.get('/', auth, async (req, res) => {
   try {
-    const baseId = req.session.isAdmin ? (req.query.base_id || null) : req.session.userId;
+    let baseId;
+
+    if (req.session.isAdmin) {
+      baseId = req.query.base_id || null;
+    } else if (req.session.isCoordinador) {
+      // Coordenador: deve informar base_id e ela deve estar nas suas bases
+      baseId = req.query.base_id;
+      if (baseId) {
+        const coordBases = (req.session.coordenadorBases || []).map(Number);
+        if (!coordBases.includes(Number(baseId)))
+          return res.status(403).json({ erro: 'Sem acesso a esta base.' });
+      } else {
+        // Sem filtro: retorna de todas as suas bases
+        const coordBases = req.session.coordenadorBases || [];
+        if (coordBases.length === 0) return res.json([]);
+        const ph   = coordBases.map((_, i) => `$${i + 1}`).join(',');
+        const rows = await db.pool.query(
+          `SELECT f.*, b.nome as base_nome FROM funcionarios f
+             JOIN bases b ON b.id = f.base_id
+            WHERE f.base_id IN (${ph}) AND f.ativo = 1
+            ORDER BY b.nome, f.cargo, f.nome`,
+          coordBases
+        );
+        return res.json(rows.rows);
+      }
+    } else {
+      baseId = req.session.userId;
+    }
 
     const rows = baseId
       ? await db.all('SELECT * FROM funcionarios WHERE base_id = ? AND ativo = 1 ORDER BY cargo, nome', [baseId])

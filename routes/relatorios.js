@@ -7,6 +7,14 @@ function auth(req, res, next) {
   next();
 }
 
+/** Retorna o tipo do ator logado para auditoria */
+function tipoAtor(session) {
+  if (session.isCoordinador) return 'coordenador';
+  if (session.isAdmin && session.isCeo) return 'ceo';
+  if (session.isAdmin) return 'gerente';
+  return 'base';
+}
+
 // ── Listar relatórios ────────────────────────────────────────────────────────
 router.get('/', auth, async (req, res) => {
   try {
@@ -322,12 +330,34 @@ router.put('/:id/status', auth, async (req, res) => {
 
     const rel = await db.get('SELECT * FROM relatorios WHERE id = ?', [req.params.id]);
     if (!rel) return res.status(404).json({ erro: 'Relatório não encontrado.' });
-    if (!req.session.isAdmin && rel.base_id !== req.session.userId)
+
+    // Permissão: admin, coordenador da base, ou a própria base
+    const coordBases = (req.session.coordenadorBases || []).map(Number);
+    if (!req.session.isAdmin &&
+        !coordBases.includes(Number(rel.base_id)) &&
+        Number(rel.base_id) !== Number(req.session.userId))
       return res.status(403).json({ erro: 'Sem permissão.' });
+
     if (rel.status === 'finalizado' && status === 'finalizado')
       return res.status(409).json({ erro: 'Relatório já está finalizado.' });
 
-    await db.run('UPDATE relatorios SET status = ? WHERE id = ?', [status, req.params.id]);
+    // Auditoria: gravar quem finalizou
+    if (status === 'finalizado') {
+      const tipo = tipoAtor(req.session);
+      const nome = req.session.nome || req.session.usuario;
+      await db.run(
+        `UPDATE relatorios
+            SET status = ?,
+                finalizado_por_tipo = ?,
+                finalizado_por_nome = ?,
+                finalizado_em       = NOW()
+          WHERE id = ?`,
+        [status, tipo, nome, req.params.id]
+      );
+    } else {
+      await db.run('UPDATE relatorios SET status = ? WHERE id = ?', [status, req.params.id]);
+    }
+
     res.json({ ok: true, status });
   } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
 });
@@ -364,7 +394,10 @@ router.get('/:id', auth, async (req, res) => {
     `, [req.params.id]);
 
     if (!rel) return res.status(404).json({ erro: 'Relatório não encontrado.' });
-    if (!req.session.isAdmin && rel.base_id !== req.session.userId)
+    const coordBases = (req.session.coordenadorBases || []).map(Number);
+    if (!req.session.isAdmin &&
+        !coordBases.includes(Number(rel.base_id)) &&
+        Number(rel.base_id) !== Number(req.session.userId))
       return res.status(403).json({ erro: 'Sem permissão.' });
 
     const rotas = await db.all(`
@@ -387,7 +420,21 @@ router.get('/:id', auth, async (req, res) => {
 // ── Criar relatório + rotas ───────────────────────────────────────────────────
 router.post('/', auth, async (req, res) => {
   try {
-    const baseId = req.session.isAdmin ? (req.body.base_id || req.session.userId) : req.session.userId;
+    // Determinar base_id conforme tipo de usuário
+    let baseId;
+    if (req.session.isAdmin) {
+      baseId = req.body.base_id || req.session.userId;
+    } else if (req.session.isCoordinador) {
+      baseId = req.body.base_id;
+      if (!baseId)
+        return res.status(400).json({ erro: 'Informe a base para o relatório.' });
+      const coordBases = (req.session.coordenadorBases || []).map(Number);
+      if (!coordBases.includes(Number(baseId)))
+        return res.status(403).json({ erro: 'Você não tem acesso a esta base.' });
+    } else {
+      baseId = req.session.userId;
+    }
+
     const { data_referencia, rotas } = req.body;
 
     if (!data_referencia) return res.status(400).json({ erro: 'Data de referência obrigatória.' });
@@ -404,11 +451,15 @@ router.post('/', auth, async (req, res) => {
       return res.status(409).json({ erro: 'Já existe relatório para esta data.' });
     }
 
+    // Auditoria: quem está criando
+    const criadoPorTipo = tipoAtor(req.session);
+    const criadoPorNome = req.session.nome || req.session.usuario;
+
     const relId = await db.transaction(async (client) => {
       const c = db.clientWrapper(client);
       const rel = await c.run(
-        'INSERT INTO relatorios (base_id, data_referencia) VALUES (?, ?)',
-        [baseId, data_referencia]
+        'INSERT INTO relatorios (base_id, data_referencia, criado_por_tipo, criado_por_nome) VALUES (?, ?, ?, ?)',
+        [baseId, data_referencia, criadoPorTipo, criadoPorNome]
       );
       for (const r of rotas) {
         await c.run(`

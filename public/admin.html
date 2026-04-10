@@ -687,7 +687,10 @@ async function carregarRelatorios() {
         <small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.cidade||'—'}</small>
       </td>
       <td class="fw-semibold">${r.data_referencia}</td>
-      <td><small>${new Date(r.postado_em).toLocaleString('pt-BR')}</small></td>
+      <td>
+        <small>${new Date(r.postado_em).toLocaleString('pt-BR')}</small>
+        ${r.criado_por_nome ? `<div class="text-muted" style="font-size:.72rem"><i class="bi bi-person me-1"></i>${r.criado_por_nome} <span class="opacity-75">(${labelTipo(r.criado_por_tipo)})</span></div>` : ''}
+      </td>
       <td class="text-center"><span class="badge bg-secondary">${r.total_rotas}</span></td>
       <td class="text-center">
         ${ocorr > 0
@@ -802,13 +805,30 @@ function badgeStatus(status, valor) {
   return `<span class="badge bg-${c.cor}"><i class="bi bi-${c.icon} me-1"></i>${c.label}</span>`;
 }
 
+function labelTipo(tipo) {
+  const m = { ceo:'👑 CEO', gerente:'🧑‍💼 Gerente', coordenador:'📋 Coordenador', base:'🏭 Base' };
+  return m[tipo] || tipo || '—';
+}
+
 async function verDetalhe(id) {
   const rel = await fetch(`/api/relatorios/${id}`).then(r => r.json());
   let html  = `
-    <div class="d-flex justify-content-between mb-3">
+    <div class="d-flex justify-content-between mb-2">
       <div><h6 class="fw-bold text-danger mb-0">${rel.base_nome} — ${rel.cidade||''}</h6>
         <small class="text-muted">Referência: ${rel.data_referencia} | Postado: ${new Date(rel.postado_em).toLocaleString('pt-BR')}</small>
       </div>
+    </div>
+    <div class="alert alert-light border py-2 px-3 mb-3 small">
+      <i class="bi bi-person-check-fill text-muted me-1"></i>
+      <strong>Criado por:</strong> ${rel.criado_por_nome||'—'}
+      <span class="badge bg-secondary ms-1">${labelTipo(rel.criado_por_tipo)}</span>
+      ${rel.finalizado_por_nome ? `
+        &nbsp;|&nbsp;
+        <i class="bi bi-lock-fill text-muted me-1"></i>
+        <strong>Finalizado por:</strong> ${rel.finalizado_por_nome}
+        <span class="badge bg-dark ms-1">${labelTipo(rel.finalizado_por_tipo)}</span>
+        em ${rel.finalizado_em ? new Date(rel.finalizado_em).toLocaleString('pt-BR') : '—'}
+      ` : ''}
     </div>`;
 
   // Totalizador

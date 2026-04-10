@@ -10,7 +10,12 @@ async function runMigrations() {
 
   const migrações = [
     // ── Tabela: relatorios ──────────────────────────────────────────────────
-    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'em_andamento'`,
+    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS status              TEXT DEFAULT 'em_andamento'`,
+    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS criado_por_tipo     TEXT DEFAULT 'base'`,
+    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS criado_por_nome     TEXT`,
+    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS finalizado_por_tipo TEXT`,
+    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS finalizado_por_nome TEXT`,
+    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS finalizado_em       TIMESTAMP`,
 
     // ── Tabela: rotas ───────────────────────────────────────────────────────
     `ALTER TABLE rotas ADD COLUMN IF NOT EXISTS numero_f1        TEXT`,

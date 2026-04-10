@@ -43,6 +43,7 @@
   <!-- Tabs -->
   <div class="d-flex gap-2 mb-0">
     <button class="nav-tab-btn active" onclick="showTab('dashboard',this)"><i class="bi bi-grid-1x2 me-1"></i>Dashboard</button>
+    <button class="nav-tab-btn" onclick="showTab('registrar',this)"><i class="bi bi-plus-circle me-1"></i>Registrar F1</button>
     <button class="nav-tab-btn" onclick="showTab('relatorios',this)"><i class="bi bi-file-earmark-text me-1"></i>Relatórios</button>
   </div>
 
@@ -91,6 +92,44 @@
     <!-- Cards das bases -->
     <h6 class="fw-bold text-danger mb-3"><i class="bi bi-building me-1"></i>Status das Minhas Bases</h6>
     <div class="row g-3" id="cardsBases"></div>
+  </div>
+
+  <!-- ════════════ REGISTRAR F1 ════════════ -->
+  <div id="tab-registrar" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
+
+    <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+      <div>
+        <label class="form-label small fw-semibold mb-1">Base *</label>
+        <select id="regBase" class="form-select" style="min-width:220px" onchange="trocarBaseRegistro()">
+          <option value="">— Selecione a base —</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">Data Referência *</label>
+        <input type="date" id="regData" class="form-control" style="width:165px" />
+      </div>
+    </div>
+
+    <div id="regBloqueado" class="d-none alert alert-danger border-0 mb-3">
+      <i class="bi bi-lock-fill me-2"></i><strong>Relatório finalizado.</strong> Esta data está bloqueada para edição.
+    </div>
+    <div id="regJaExiste" class="d-none alert alert-warning border-0 mb-3">
+      <i class="bi bi-exclamation-triangle me-2"></i>Já existe relatório para esta base/data.
+    </div>
+
+    <!-- Rotas dinâmicas -->
+    <div id="regRotas"></div>
+
+    <div class="d-flex gap-2 mt-3 mb-4">
+      <button class="btn btn-outline-secondary btn-sm" onclick="addRota()"><i class="bi bi-plus me-1"></i>Adicionar Rota</button>
+    </div>
+
+    <button id="btnEnviarReg" class="btn btn-red px-4" onclick="enviarRegistro()">
+      <i class="bi bi-send me-1"></i>Enviar Relatório F1
+    </button>
+    <div id="regMsgSucesso" class="d-none alert alert-success mt-3 border-0">
+      <i class="bi bi-check-circle me-2"></i>Relatório enviado com sucesso!
+    </div>
   </div>
 
   <!-- ════════════ RELATÓRIOS ════════════ -->
@@ -165,8 +204,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-let minhasBases = [];
-let relsCache   = [];
+let minhasBases  = [];
+let relsCache    = [];
+let funcPorBase  = {};   // cache de funcionários por base_id
+let contadorRota = 0;
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
@@ -179,6 +220,9 @@ let relsCache   = [];
   document.getElementById('dataFiltro').value = ontem.toISOString().slice(0,10);
   document.getElementById('dataFiltro').addEventListener('change', carregarDashboard);
 
+  // Data padrão do registro = ontem
+  document.getElementById('regData').value = ontem.toISOString().slice(0,10);
+
   // Filtros de relatório: últimos 30 dias
   const hoje = new Date(), ha30 = new Date();
   ha30.setDate(ha30.getDate() - 30);
@@ -188,9 +232,18 @@ let relsCache   = [];
   // Carregar bases
   const basesRes = await fetch('/api/coordenadores/minhas-bases').then(r => r.json());
   minhasBases = basesRes;
-  const sel = document.getElementById('filtroBase');
-  sel.innerHTML = '<option value="">Todas as minhas bases</option>' +
+
+  // Popular seletores
+  const selFiltro = document.getElementById('filtroBase');
+  selFiltro.innerHTML = '<option value="">Todas as minhas bases</option>' +
     minhasBases.map(b => `<option value="${b.id}">${b.nome}</option>`).join('');
+
+  const selReg = document.getElementById('regBase');
+  selReg.innerHTML = '<option value="">— Selecione a base —</option>' +
+    minhasBases.map(b => `<option value="${b.id}">${b.nome}</option>`).join('');
+
+  // Primeira rota vazia
+  addRota();
 
   await Promise.all([carregarDashboard(), carregarRelatorios()]);
   setInterval(() => carregarDashboard(), 5 * 60 * 1000);
@@ -327,9 +380,27 @@ const STATUS_INFO = {
   pago:        { label:'Pago',            cor:'#6610f2' },
 };
 
+function labelTipo(tipo) {
+  const m = { ceo:'👑 CEO', gerente:'🧑‍💼 Gerente', coordenador:'📋 Coordenador', base:'🏭 Base' };
+  return m[tipo] || tipo || '—';
+}
+
 async function verDetalhe(id) {
   const rel = await fetch(`/api/relatorios/${id}`).then(r => r.json());
-  let html = `<p class="fw-bold text-danger mb-3">${rel.base_nome} — ${rel.cidade||''} | Ref: ${rel.data_referencia} | Postado: ${new Date(rel.postado_em).toLocaleString('pt-BR')}</p>`;
+  let html = `
+    <div class="mb-2"><h6 class="fw-bold text-danger mb-0">${rel.base_nome} — ${rel.cidade||''}</h6>
+      <small class="text-muted">Ref: ${rel.data_referencia} | Postado: ${new Date(rel.postado_em).toLocaleString('pt-BR')}</small>
+    </div>
+    <div class="alert alert-light border py-2 px-3 mb-3 small">
+      <i class="bi bi-person-check-fill text-muted me-1"></i>
+      <strong>Criado por:</strong> ${rel.criado_por_nome||'—'}
+      <span class="badge bg-secondary ms-1">${labelTipo(rel.criado_por_tipo)}</span>
+      ${rel.finalizado_por_nome ? `
+        &nbsp;|&nbsp; <i class="bi bi-lock-fill text-muted me-1"></i>
+        <strong>Finalizado por:</strong> ${rel.finalizado_por_nome}
+        <span class="badge bg-dark ms-1">${labelTipo(rel.finalizado_por_tipo)}</span>
+      ` : ''}
+    </div>`;
   html += `<div class="table-responsive"><table class="table table-bordered table-sm align-middle">
     <thead><tr><th>Nº Transp.</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th><th>Mercadorias Faltando</th><th>Status Desconto</th><th>Vl. F1</th><th>Motivo</th></tr></thead><tbody>`;
   for (const r of rel.rotas) {
@@ -374,6 +445,193 @@ async function exportarCSV() {
   const a    = document.createElement('a'); a.href=url;
   a.download = `coord_f1_${new Date().toISOString().slice(0,10)}.csv`;
   a.click(); URL.revokeObjectURL(url);
+}
+
+// ── Registrar F1 ─────────────────────────────────────────────────────────────
+
+function mascaraMoeda(el) {
+  let v = el.value.replace(/\D/g,'');
+  v = (parseInt(v||'0') / 100).toFixed(2);
+  el.value = 'R$ ' + v.replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+}
+function parseMoeda(s) {
+  return parseFloat((s||'0').replace(/[^\d,]/g,'').replace(',','.')) || 0;
+}
+
+const STATUS_DESC = {
+  nenhum:       'Sem desconto',
+  motorista:    'Desc. Motorista',
+  equipe:       'Desc. Equipe',
+  abonar:       'Abonado',
+  regularizado: 'Regularizado',
+  pago:         'Pago',
+};
+
+async function trocarBaseRegistro() {
+  const baseId = document.getElementById('regBase').value;
+  if (!baseId) return;
+  if (!funcPorBase[baseId]) {
+    const funcs = await fetch(`/api/funcionarios?base_id=${baseId}`).then(r => r.json());
+    funcPorBase[baseId] = funcs;
+  }
+  // Recarregar todos os selects de funcionário com os dados da nova base
+  document.querySelectorAll('.sel-motorista, .sel-ajudante, .sel-ajudante2').forEach(sel => {
+    preencherSelectFunc(sel, baseId);
+  });
+}
+
+function preencherSelectFunc(sel, baseId) {
+  const funcs  = funcPorBase[baseId] || [];
+  const motoristas = funcs.filter(f => f.cargo === 'motorista');
+  const ajudantes  = funcs.filter(f => f.cargo === 'ajudante');
+  const isMot      = sel.classList.contains('sel-motorista');
+  const lista      = isMot ? motoristas : ajudantes;
+  const old        = sel.value;
+  sel.innerHTML = `<option value="">— selecionar —</option>` +
+    lista.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
+  if (old) sel.value = old;
+}
+
+function addRota() {
+  contadorRota++;
+  const idx = contadorRota;
+  const div = document.createElement('div');
+  div.id = `rota-bloco-${idx}`;
+  div.className = 'border rounded p-3 mb-3 bg-light position-relative';
+  div.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="fw-bold text-danger"><i class="bi bi-truck me-1"></i>Rota #${idx}</span>
+      ${idx > 1 ? `<button class="btn btn-outline-danger btn-sm py-0" onclick="removeRota(${idx})"><i class="bi bi-trash"></i></button>` : ''}
+    </div>
+    <div class="row g-2">
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">Nº do Transporte *</label>
+        <input type="text" class="form-control form-control-sm reg-nrota" placeholder="Ex: 106088760" />
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">Nº da F1</label>
+        <input type="text" class="form-control form-control-sm reg-nf1" placeholder="Ex: 0001" />
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">Motorista</label>
+        <select class="form-select form-select-sm sel-motorista"></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">Ajudante 1</label>
+        <select class="form-select form-select-sm sel-ajudante"></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">Ajudante 2</label>
+        <select class="form-select form-select-sm sel-ajudante2"></select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">Mercadorias Faltando</label>
+        <input type="text" class="form-control form-control-sm reg-mercadorias" />
+      </div>
+      <div class="col-md-3 mt-2">
+        <label class="form-label small fw-semibold mb-1">Status do Desconto</label>
+        <select class="form-select form-select-sm reg-status" onchange="toggleVlF1(this, ${idx})">
+          ${Object.entries(STATUS_DESC).map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}
+        </select>
+      </div>
+      <div class="col-md-2 mt-2 vl-f1-grupo" id="vl-f1-${idx}" style="display:none">
+        <label class="form-label small fw-semibold mb-1">Vl. da F1 (R$)</label>
+        <input type="text" class="form-control form-control-sm reg-valor" placeholder="R$ 0,00"
+               oninput="mascaraMoeda(this)" />
+      </div>
+    </div>`;
+  document.getElementById('regRotas').appendChild(div);
+
+  // Preencher selects se já tem base selecionada
+  const baseId = document.getElementById('regBase').value;
+  if (baseId && funcPorBase[baseId]) {
+    div.querySelectorAll('.sel-motorista, .sel-ajudante, .sel-ajudante2').forEach(sel => {
+      preencherSelectFunc(sel, baseId);
+    });
+  } else {
+    div.querySelectorAll('.sel-motorista, .sel-ajudante, .sel-ajudante2').forEach(sel => {
+      sel.innerHTML = '<option value="">— selecionar —</option>';
+    });
+  }
+}
+
+function removeRota(idx) {
+  const el = document.getElementById(`rota-bloco-${idx}`);
+  if (el) el.remove();
+}
+
+function toggleVlF1(sel, idx) {
+  const grp = document.getElementById(`vl-f1-${idx}`);
+  const mostrar = ['motorista','equipe','regularizado','pago'].includes(sel.value);
+  grp.style.display = mostrar ? '' : 'none';
+}
+
+async function enviarRegistro() {
+  const baseId = document.getElementById('regBase').value;
+  const data   = document.getElementById('regData').value;
+
+  if (!baseId) { alert('Selecione a base.'); return; }
+  if (!data)   { alert('Informe a data de referência.'); return; }
+
+  const blocos = document.querySelectorAll('#regRotas > div');
+  if (blocos.length === 0) { alert('Adicione ao menos uma rota.'); return; }
+
+  const rotas = [];
+  for (const bloco of blocos) {
+    const nrota = bloco.querySelector('.reg-nrota').value.trim();
+    if (!nrota) { alert('Preencha o Nº do Transporte em todas as rotas.'); return; }
+    rotas.push({
+      numero_rota:           nrota,
+      numero_f1:             bloco.querySelector('.reg-nf1').value.trim() || null,
+      motorista_id:          bloco.querySelector('.sel-motorista').value  || null,
+      ajudante_id:           bloco.querySelector('.sel-ajudante').value   || null,
+      ajudante2_id:          bloco.querySelector('.sel-ajudante2').value  || null,
+      mercadorias_faltando:  bloco.querySelector('.reg-mercadorias').value.trim() || null,
+      status_desconto:       bloco.querySelector('.reg-status').value,
+      valor_desconto:        parseMoeda(bloco.querySelector('.reg-valor')?.value || '0'),
+    });
+  }
+
+  const btn = document.getElementById('btnEnviarReg');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando...';
+
+  try {
+    const res = await fetch('/api/relatorios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base_id: baseId, data_referencia: data, rotas })
+    });
+    const data2 = await res.json();
+
+    if (!res.ok) {
+      if (data2.erro === 'finalizado') {
+        document.getElementById('regBloqueado').classList.remove('d-none');
+        document.getElementById('regJaExiste').classList.add('d-none');
+      } else if (data2.erro?.includes('Já existe')) {
+        document.getElementById('regJaExiste').classList.remove('d-none');
+        document.getElementById('regBloqueado').classList.add('d-none');
+      } else {
+        alert(data2.erro || 'Erro ao enviar relatório.');
+      }
+    } else {
+      document.getElementById('regMsgSucesso').classList.remove('d-none');
+      document.getElementById('regJaExiste').classList.add('d-none');
+      document.getElementById('regBloqueado').classList.add('d-none');
+      // Limpar rotas e adicionar uma nova
+      document.getElementById('regRotas').innerHTML = '';
+      contadorRota = 0;
+      addRota();
+      setTimeout(() => document.getElementById('regMsgSucesso').classList.add('d-none'), 4000);
+      carregarDashboard();
+      carregarRelatorios();
+    }
+  } catch (err) {
+    alert('Erro de conexão. Tente novamente.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send me-1"></i>Enviar Relatório F1';
+  }
 }
 
 async function logout() {
