@@ -267,6 +267,25 @@ router.get('/stats/funcionario', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
+// ── Alterar status do relatório (em_andamento ↔ finalizado) ──────────────────
+router.put('/:id/status', auth, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['em_andamento', 'finalizado'].includes(status))
+      return res.status(400).json({ erro: 'Status inválido. Use "em_andamento" ou "finalizado".' });
+
+    const rel = await db.get('SELECT * FROM relatorios WHERE id = ?', [req.params.id]);
+    if (!rel) return res.status(404).json({ erro: 'Relatório não encontrado.' });
+    if (!req.session.isAdmin && rel.base_id !== req.session.userId)
+      return res.status(403).json({ erro: 'Sem permissão.' });
+    if (rel.status === 'finalizado' && status === 'finalizado')
+      return res.status(409).json({ erro: 'Relatório já está finalizado.' });
+
+    await db.run('UPDATE relatorios SET status = ? WHERE id = ?', [status, req.params.id]);
+    res.json({ ok: true, status });
+  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
 // ── Alertas ───────────────────────────────────────────────────────────────────
 router.get('/alertas/pendentes', auth, async (req, res) => {
   if (!req.session.isAdmin) return res.status(403).json({ erro: 'Sem permissão.' });
@@ -330,10 +349,14 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ erro: 'Informe ao menos uma rota.' });
 
     const jaExiste = await db.get(
-      'SELECT id FROM relatorios WHERE base_id = ? AND data_referencia = ?',
+      'SELECT id, status FROM relatorios WHERE base_id = ? AND data_referencia = ?',
       [baseId, data_referencia]
     );
-    if (jaExiste) return res.status(409).json({ erro: 'Já existe relatório para esta data.' });
+    if (jaExiste) {
+      if (jaExiste.status === 'finalizado')
+        return res.status(409).json({ erro: 'finalizado', msg: 'Este relatório está finalizado e não pode ser alterado.' });
+      return res.status(409).json({ erro: 'Já existe relatório para esta data.' });
+    }
 
     const relId = await db.transaction(async (client) => {
       const c = db.clientWrapper(client);

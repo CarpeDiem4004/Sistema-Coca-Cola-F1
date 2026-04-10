@@ -67,13 +67,22 @@
     </div>
 
     <div id="avisoJaPostou" class="alert alert-success d-none"></div>
+    <div id="avisoFinalizado" class="alert alert-secondary d-none border-0" style="background:#f1f1f1;border-left:5px solid #6c757d !important">
+      <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-lock-fill fs-5 text-secondary"></i>
+        <div>
+          <strong class="text-secondary">Relatório Finalizado</strong>
+          <div class="small text-muted">Este relatório foi finalizado e não pode mais ser alterado.</div>
+        </div>
+      </div>
+    </div>
     <div id="alertaRel" class="alert d-none"></div>
 
     <div id="listaRotas"></div>
 
-    <div class="d-flex gap-2 mt-3">
-      <button class="btn btn-outline-secondary btn-sm" onclick="addRota()"><i class="bi bi-plus-circle me-1"></i>Adicionar Rota</button>
-      <button class="btn btn-red" onclick="enviarRelatorio()"><i class="bi bi-send-fill me-2"></i>Enviar Relatório</button>
+    <div class="d-flex gap-2 mt-3" id="botoesRelatorio">
+      <button class="btn btn-outline-secondary btn-sm" id="btnAddRota" onclick="addRota()"><i class="bi bi-plus-circle me-1"></i>Adicionar Rota</button>
+      <button class="btn btn-red" id="btnEnviar" onclick="enviarRelatorio()"><i class="bi bi-send-fill me-2"></i>Enviar Relatório</button>
     </div>
   </div>
 
@@ -495,16 +504,45 @@ function atualizarDesconto(card) {
   }
 }
 
-// ── Verificar se já postou ───────────────────────────────────────────────────
+// ── Verificar se já postou (e se está finalizado) ────────────────────────────
 async function verificarData() {
-  const data = document.getElementById('dataRef').value;
-  const res  = await fetch(`/api/relatorios?data=${data}`).then(r => r.json());
+  const data  = document.getElementById('dataRef').value;
+  const res   = await fetch(`/api/relatorios?data=${data}`).then(r => r.json());
   const aviso = document.getElementById('avisoJaPostou');
+  const avisoFin  = document.getElementById('avisoFinalizado');
+  const btnEnviar = document.getElementById('btnEnviar');
+  const btnAdd    = document.getElementById('btnAddRota');
+
   if (res.length > 0) {
-    aviso.classList.remove('d-none');
-    aviso.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>Relatório já enviado para <strong>${data}</strong> em ${new Date(res[0].postado_em).toLocaleString('pt-BR')}.`;
+    const rel = res[0];
+    const finalizado = rel.status === 'finalizado';
+
+    avisoFin.classList.toggle('d-none', !finalizado);
+    aviso.classList.toggle('d-none', finalizado);
+
+    if (!finalizado) {
+      aviso.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>Relatório já enviado para <strong>${data}</strong> em ${new Date(rel.postado_em).toLocaleString('pt-BR')}.`;
+    }
+
+    // Bloquear formulário se finalizado
+    btnEnviar.disabled = finalizado;
+    btnAdd.disabled    = finalizado;
+    document.querySelectorAll('.rota-card input, .rota-card select').forEach(el => el.disabled = finalizado);
+    if (finalizado) {
+      btnEnviar.innerHTML = '<i class="bi bi-lock-fill me-2"></i>Relatório Finalizado';
+      btnEnviar.className = 'btn btn-secondary';
+    } else {
+      btnEnviar.innerHTML = '<i class="bi bi-send-fill me-2"></i>Enviar Relatório';
+      btnEnviar.className = 'btn btn-red';
+    }
   } else {
     aviso.classList.add('d-none');
+    avisoFin.classList.add('d-none');
+    btnEnviar.disabled = false;
+    btnAdd.disabled    = false;
+    btnEnviar.innerHTML = '<i class="bi bi-send-fill me-2"></i>Enviar Relatório';
+    btnEnviar.className = 'btn btn-red';
+    document.querySelectorAll('.rota-card input, .rota-card select').forEach(el => el.disabled = false);
   }
 }
 
@@ -601,14 +639,45 @@ async function carregarHistorico() {
   const rels = await fetch('/api/relatorios').then(r => r.json());
   const tb   = document.getElementById('tbHistorico');
   tb.innerHTML = rels.length === 0
-    ? '<tr><td colspan="4" class="text-center text-muted">Nenhum relatório enviado</td></tr>'
-    : rels.map(r => `
-        <tr>
+    ? '<tr><td colspan="5" class="text-center text-muted">Nenhum relatório enviado</td></tr>'
+    : rels.map(r => {
+        const finalizado = r.status === 'finalizado';
+        return `<tr>
           <td>${r.data_referencia}</td>
-          <td>${new Date(r.postado_em).toLocaleString('pt-BR')}</td>
+          <td><small>${new Date(r.postado_em).toLocaleString('pt-BR')}</small></td>
           <td><span class="badge bg-secondary">${r.total_rotas} rota(s)</span></td>
-          <td><button class="btn btn-outline-danger btn-sm" onclick="verDetalhe(${r.id})"><i class="bi bi-eye me-1"></i>Ver</button></td>
-        </tr>`).join('');
+          <td>
+            ${finalizado
+              ? `<span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>`
+              : `<span class="badge bg-success"><i class="bi bi-pencil me-1"></i>Em andamento</span>`
+            }
+          </td>
+          <td class="d-flex gap-1">
+            <button class="btn btn-outline-danger btn-sm" onclick="verDetalhe(${r.id})">
+              <i class="bi bi-eye me-1"></i>Ver
+            </button>
+            ${!finalizado
+              ? `<button class="btn btn-outline-secondary btn-sm" onclick="finalizarRelatorio(${r.id}, '${r.data_referencia}')" title="Finalizar relatório">
+                   <i class="bi bi-lock me-1"></i>Finalizar
+                 </button>`
+              : ''
+            }
+          </td>
+        </tr>`;
+      }).join('');
+}
+
+async function finalizarRelatorio(id, data) {
+  if (!confirm(`Finalizar o relatório de ${data}?\n\nApós finalizar, ele não poderá mais ser alterado.`)) return;
+  const res = await fetch(`/api/relatorios/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'finalizado' })
+  });
+  const d = await res.json();
+  if (!res.ok) { alert(d.erro || 'Erro ao finalizar.'); return; }
+  await carregarHistorico();
+  await verificarData(); // atualiza o formulário se for a data atual
 }
 
 // ── Stats / Mini-dash ────────────────────────────────────────────────────────
