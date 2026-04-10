@@ -1,9 +1,10 @@
 require('dotenv').config();
-const express = require('express');
-const session = require('express-session');
-const path    = require('path');
-const cron    = require('node-cron');
-const db      = require('./database/db');
+const express    = require('express');
+const session    = require('express-session');
+const path       = require('path');
+const cron       = require('node-cron');
+const db         = require('./database/db');
+const { runMigrations } = require('./database/migrations');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -113,7 +114,17 @@ cron.schedule('0 10 * * 1-6', async () => {
 }, { timezone: 'America/Sao_Paulo' });
 
 // ── Iniciar servidor ──────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`\n🚀 Coca-Cola F1 rodando em http://localhost:${PORT}`);
-  console.log(`   Banco: ${process.env.DATABASE_URL ? 'Supabase (PostgreSQL)' : 'não configurado!'}\n`);
-});
+runMigrations()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`\n🚀 Coca-Cola F1 rodando em http://localhost:${PORT}`);
+      console.log(`   Banco: ${process.env.DATABASE_URL ? 'Supabase (PostgreSQL)' : 'não configurado!'}\n`);
+    });
+  })
+  .catch(err => {
+    console.error('[STARTUP] Falha nas migrações:', err.message);
+    // Inicia o servidor mesmo assim para não travar o deploy
+    app.listen(PORT, () => {
+      console.log(`\n⚠️  Coca-Cola F1 rodando em http://localhost:${PORT} (migração com falha)`);
+    });
+  });

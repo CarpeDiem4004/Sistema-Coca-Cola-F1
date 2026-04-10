@@ -81,10 +81,13 @@ router.get('/dashboard/resumo', auth, async (req, res) => {
     const { data } = req.query;
     const dataRef  = data || new Date().toISOString().slice(0, 10);
 
-    // Horário limite: 10h (Brasília)
+    // Horário limite: 10h (Brasília = UTC-3)
     const horaLimite = 10;
     const agora = new Date();
-    const horaAtual = agora.getHours();
+    // Calcular hora e data em Brasília (UTC-3)
+    const brasilia = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
+    const hojeStr       = brasilia.toISOString().slice(0, 10);
+    const horaAtual     = brasilia.getUTCHours(); // hora atual em Brasília
 
     let bases;
     if (req.session.isCoordinador) {
@@ -127,8 +130,11 @@ router.get('/dashboard/resumo', auth, async (req, res) => {
       };
     });
 
-    // Bases pendentes após 10h
-    const pendentes = (horaAtual >= horaLimite)
+    // Bases pendentes:
+    //  - Se a data consultada é anterior a hoje (Brasília) → sempre mostra pendentes
+    //  - Se é hoje → só mostra após 10h (horário de Brasília)
+    const isPastDate = dataRef < hojeStr;
+    const pendentes = (isPastDate || horaAtual >= horaLimite)
       ? resultado.filter(b => !b.postou)
       : [];
 
