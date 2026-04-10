@@ -10,7 +10,7 @@ function auth(req, res, next) {
 // ── Listar relatórios ────────────────────────────────────────────────────────
 router.get('/', auth, async (req, res) => {
   try {
-    const { data, base_id } = req.query;
+    const { data, data_de, data_ate, base_id, status } = req.query;
     const params = [];
     let where = 'WHERE 1=1';
 
@@ -22,14 +22,33 @@ router.get('/', auth, async (req, res) => {
       where += ` AND r.base_id = $${params.length}`;
     }
 
+    // Filtro de data única (compatibilidade)
     if (data) {
       params.push(data);
       where += ` AND r.data_referencia = $${params.length}`;
     }
+    // Filtro de período
+    if (data_de) {
+      params.push(data_de);
+      where += ` AND r.data_referencia >= $${params.length}`;
+    }
+    if (data_ate) {
+      params.push(data_ate);
+      where += ` AND r.data_referencia <= $${params.length}`;
+    }
+    // Filtro de status
+    if (status) {
+      params.push(status);
+      where += ` AND r.status = $${params.length}`;
+    }
 
     const rows = await db.pool.query(`
-      SELECT r.*, b.nome as base_nome, b.cidade,
-             (SELECT COUNT(*) FROM rotas WHERE relatorio_id = r.id) as total_rotas
+      SELECT r.*,
+             b.nome  AS base_nome,
+             b.cidade,
+             COALESCE((SELECT COUNT(*) FROM rotas WHERE relatorio_id = r.id), 0) AS total_rotas,
+             COALESCE((SELECT COUNT(*) FROM rotas WHERE relatorio_id = r.id AND status_desconto NOT IN ('nenhum','abonar')), 0) AS total_ocorrencias,
+             COALESCE((SELECT SUM(valor_desconto) FROM rotas WHERE relatorio_id = r.id AND status_desconto NOT IN ('nenhum','abonar')), 0) AS total_valor_f1
       FROM relatorios r
       JOIN bases b ON b.id = r.base_id
       ${where}

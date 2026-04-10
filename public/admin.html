@@ -179,18 +179,58 @@
 
   <!-- ════════════ RELATÓRIOS ════════════ -->
   <div id="tab-relatorios" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h5 class="fw-bold mb-0"><i class="bi bi-file-earmark-text text-danger me-2"></i>Todos os Relatórios</h5>
-      <div class="d-flex gap-2">
-        <select id="filtroBase" class="form-select form-select-sm" style="width:200px">
+
+    <!-- Barra de filtros -->
+    <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+      <div>
+        <label class="form-label small fw-semibold mb-1">Base</label>
+        <select id="filtroBase" class="form-select form-select-sm" style="width:190px" onchange="carregarRelatorios()">
           <option value="">Todas as bases</option>
         </select>
       </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">De</label>
+        <input type="date" id="filtroDataDe" class="form-control form-control-sm" style="width:150px" onchange="carregarRelatorios()" />
+      </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">Até</label>
+        <input type="date" id="filtroDataAte" class="form-control form-control-sm" style="width:150px" onchange="carregarRelatorios()" />
+      </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select id="filtroStatus" class="form-select form-select-sm" style="width:160px" onchange="carregarRelatorios()">
+          <option value="">Todos</option>
+          <option value="em_andamento">Em andamento</option>
+          <option value="finalizado">Finalizado</option>
+        </select>
+      </div>
+      <div class="ms-auto d-flex gap-2 align-items-end">
+        <button class="btn btn-outline-secondary btn-sm" onclick="carregarRelatorios()">
+          <i class="bi bi-arrow-clockwise me-1"></i>Atualizar
+        </button>
+        <button class="btn btn-success btn-sm" onclick="exportarCSV()">
+          <i class="bi bi-download me-1"></i>Exportar CSV
+        </button>
+      </div>
     </div>
+
+    <!-- Resumo rápido -->
+    <div class="d-flex gap-3 mb-3 flex-wrap" id="resumoRelatorios"></div>
+
+    <!-- Tabela -->
     <div class="table-responsive">
-      <table class="table table-bordered table-hover">
+      <table class="table table-bordered table-hover align-middle">
         <thead>
-          <tr><th>Base</th><th>Data Ref.</th><th>Postado em</th><th>Rotas</th><th>Entregas</th><th>Recebido</th><th>Descontos</th><th></th></tr>
+          <tr>
+            <th>Base</th>
+            <th>Data Ref.</th>
+            <th>Postado em</th>
+            <th class="text-center">Rotas</th>
+            <th class="text-center">Ocorrências</th>
+            <th class="text-end">Vl. Total F1</th>
+            <th class="text-center">Status</th>
+            <th class="text-center">Ações</th>
+          </tr>
         </thead>
         <tbody id="tbRelatorios"></tbody>
       </table>
@@ -393,7 +433,13 @@ let isCeo = false;
 
   const hoje = new Date(); hoje.setDate(hoje.getDate() - 1);
   document.getElementById('dataFiltro').value = hoje.toISOString().slice(0, 10);
-  document.getElementById('dataFiltro').addEventListener('change', () => { carregarDashboard(); carregarRelatorios(); });
+  document.getElementById('dataFiltro').addEventListener('change', () => { carregarDashboard(); });
+
+  // Inicializar filtros da aba Relatórios com últimos 30 dias
+  const hoje30 = new Date();
+  const ha30   = new Date(); ha30.setDate(ha30.getDate() - 30);
+  document.getElementById('filtroDataAte').value = hoje30.toISOString().slice(0,10);
+  document.getElementById('filtroDataDe').value  = ha30.toISOString().slice(0,10);
 
   await Promise.all([carregarDashboard(), carregarRelatorios(), carregarBases(), carregarAlertas()]);
 
@@ -536,28 +582,146 @@ async function carregarDashboard() {
 }
 
 // ── Relatórios ────────────────────────────────────────────────────────────────
+let relatoriosCache = [];
+
 async function carregarRelatorios() {
-  const data   = document.getElementById('dataFiltro').value;
-  const baseId = document.getElementById('filtroBase').value;
-  let url      = `/api/relatorios?data=${data}`;
-  if (baseId) url += `&base_id=${baseId}`;
+  const baseId  = document.getElementById('filtroBase').value;
+  const dataDe  = document.getElementById('filtroDataDe')?.value  || '';
+  const dataAte = document.getElementById('filtroDataAte')?.value || '';
+  const status  = document.getElementById('filtroStatus')?.value  || '';
 
-  const rels = await fetch(url).then(r => r.json());
-  const tb   = document.getElementById('tbRelatorios');
+  let url = '/api/relatorios?';
+  if (baseId)  url += `base_id=${baseId}&`;
+  if (dataDe)  url += `data_de=${dataDe}&`;
+  if (dataAte) url += `data_ate=${dataAte}&`;
+  if (status)  url += `status=${status}&`;
 
-  tb.innerHTML = rels.length === 0
-    ? '<tr><td colspan="8" class="text-center text-muted py-3">Nenhum relatório encontrado</td></tr>'
-    : rels.map(r => `
-        <tr>
-          <td><strong>${r.base_nome}</strong><br><small class="text-muted">${r.cidade||''}</small></td>
-          <td>${r.data_referencia}</td>
-          <td>${new Date(r.postado_em).toLocaleString('pt-BR')}</td>
-          <td><span class="badge bg-secondary">${r.total_rotas}</span></td>
-          <td>—</td>
-          <td>—</td>
-          <td>—</td>
-          <td><button class="btn btn-outline-danger btn-sm" onclick="verDetalhe(${r.id})"><i class="bi bi-eye me-1"></i>Detalhe</button></td>
-        </tr>`).join('');
+  relatoriosCache = await fetch(url).then(r => r.json());
+  const tb = document.getElementById('tbRelatorios');
+
+  // Resumo rápido
+  const totalRels    = relatoriosCache.length;
+  const totalRotas   = relatoriosCache.reduce((s,r) => s + Number(r.total_rotas||0), 0);
+  const finalizados  = relatoriosCache.filter(r => r.status === 'finalizado').length;
+  const emAndamento  = relatoriosCache.filter(r => r.status !== 'finalizado').length;
+
+  document.getElementById('resumoRelatorios').innerHTML = `
+    <span class="badge bg-secondary fs-6 fw-normal px-3 py-2"><i class="bi bi-file-earmark me-1"></i>${totalRels} relatório(s)</span>
+    <span class="badge bg-primary fs-6 fw-normal px-3 py-2"><i class="bi bi-signpost-2 me-1"></i>${totalRotas} rota(s)</span>
+    <span class="badge bg-success fs-6 fw-normal px-3 py-2"><i class="bi bi-lock me-1"></i>${finalizados} finalizado(s)</span>
+    <span class="badge bg-warning text-dark fs-6 fw-normal px-3 py-2"><i class="bi bi-pencil me-1"></i>${emAndamento} em andamento</span>
+  `;
+
+  if (relatoriosCache.length === 0) {
+    tb.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Nenhum relatório encontrado</td></tr>';
+    return;
+  }
+
+  tb.innerHTML = relatoriosCache.map(r => {
+    const finalizado = r.status === 'finalizado';
+    const ocorr      = Number(r.total_ocorrencias || 0);
+    const vlTotal    = Number(r.total_valor_f1    || 0);
+
+    return `<tr>
+      <td>
+        <div class="fw-bold">${r.base_nome}</div>
+        <small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.cidade||'—'}</small>
+      </td>
+      <td class="fw-semibold">${r.data_referencia}</td>
+      <td><small>${new Date(r.postado_em).toLocaleString('pt-BR')}</small></td>
+      <td class="text-center"><span class="badge bg-secondary">${r.total_rotas}</span></td>
+      <td class="text-center">
+        ${ocorr > 0
+          ? `<span class="badge bg-danger">${ocorr}</span>`
+          : `<span class="badge bg-success">0</span>`}
+      </td>
+      <td class="text-end fw-bold ${vlTotal > 0 ? 'text-danger' : 'text-muted'}">
+        ${fmtBRL(vlTotal)}
+      </td>
+      <td class="text-center">
+        ${finalizado
+          ? `<span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>`
+          : `<span class="badge bg-success"><i class="bi bi-pencil me-1"></i>Em andamento</span>`}
+      </td>
+      <td class="text-center">
+        <div class="d-flex gap-1 justify-content-center">
+          <button class="btn btn-outline-danger btn-sm px-2" onclick="verDetalhe(${r.id})" title="Ver detalhes">
+            <i class="bi bi-eye"></i>
+          </button>
+          <button class="btn btn-outline-success btn-sm px-2" onclick="exportarRelatorioCSV(${r.id})" title="Exportar CSV">
+            <i class="bi bi-download"></i>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Exportar CSV (todos os relatórios filtrados) ──────────────────────────────
+async function exportarCSV() {
+  if (relatoriosCache.length === 0) { alert('Nenhum relatório para exportar.'); return; }
+
+  const linhas = [['Base','Cidade','Data Ref.','Postado em','Status Relatório','Nº Transporte','Nº F1','Motorista','Ajudante 1','Ajudante 2','Mercadorias Faltando','Status Desconto','Vl. F1 (R$)','Motivo/Justificativa']];
+
+  for (const r of relatoriosCache) {
+    const det = await fetch(`/api/relatorios/${r.id}`).then(x => x.json());
+    for (const rt of det.rotas) {
+      linhas.push([
+        det.base_nome,
+        det.cidade || '',
+        det.data_referencia,
+        new Date(det.postado_em).toLocaleString('pt-BR'),
+        det.status === 'finalizado' ? 'Finalizado' : 'Em andamento',
+        rt.numero_rota   || '',
+        rt.numero_f1     || '',
+        rt.motorista_nome  || '',
+        rt.ajudante_nome   || '',
+        rt.ajudante2_nome  || '',
+        rt.mercadorias_faltando || '',
+        traduzirStatus(rt.status_desconto),
+        Number(rt.valor_desconto||0).toFixed(2).replace('.',','),
+        rt.motivo_desconto || '',
+      ]);
+    }
+  }
+
+  const csv  = linhas.map(l => l.map(c => `"${String(c).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `relatorios_f1_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function exportarRelatorioCSV(id) {
+  const det  = await fetch(`/api/relatorios/${id}`).then(r => r.json());
+  const linhas = [['Base','Cidade','Data Ref.','Postado em','Status Relatório','Nº Transporte','Nº F1','Motorista','Ajudante 1','Ajudante 2','Mercadorias Faltando','Status Desconto','Vl. F1 (R$)','Motivo/Justificativa']];
+  for (const rt of det.rotas) {
+    linhas.push([
+      det.base_nome, det.cidade||'', det.data_referencia,
+      new Date(det.postado_em).toLocaleString('pt-BR'),
+      det.status === 'finalizado' ? 'Finalizado' : 'Em andamento',
+      rt.numero_rota||'', rt.numero_f1||'',
+      rt.motorista_nome||'', rt.ajudante_nome||'', rt.ajudante2_nome||'',
+      rt.mercadorias_faltando||'',
+      traduzirStatus(rt.status_desconto),
+      Number(rt.valor_desconto||0).toFixed(2).replace('.',','),
+      rt.motivo_desconto||'',
+    ]);
+  }
+  const csv  = linhas.map(l => l.map(c => `"${String(c).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a'); a.href=url;
+  a.download = `f1_${det.base_nome.replace(/\s/g,'_')}_${det.data_referencia}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function traduzirStatus(s) {
+  const m = { motorista:'Desc. Motorista', equipe:'Desc. Equipe', abonar:'Abonado', regularizado:'Regularizado', pago:'Pago', nenhum:'Sem desconto' };
+  return m[s] || s || '';
 }
 
 async function verRelatorioBase(baseId) {
