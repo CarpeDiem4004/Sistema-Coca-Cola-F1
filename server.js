@@ -46,7 +46,8 @@ app.use('/api/relatorios',   require('./routes/relatorios'));
 app.use('/api/bases',        require('./routes/bases'));
 app.use('/api/operadores',   require('./routes/operadores'));
 app.use('/api/upload',       require('./routes/upload'));
-app.use('/api/gerentes',     require('./routes/gerentes'));
+app.use('/api/gerentes',      require('./routes/gerentes'));
+app.use('/api/coordenadores', require('./routes/coordenadores'));
 
 // ── Guards de página (server-side) ────────────────────────────────────────────
 function requireLogin(req, res, next) {
@@ -59,15 +60,22 @@ function requireAdmin(req, res, next) {
   next();
 }
 function requireOperador(req, res, next) {
-  if (!req.session.userId) return res.redirect('/');
-  if (req.session.isAdmin) return res.redirect('/admin');
+  if (!req.session.userId)         return res.redirect('/');
+  if (req.session.isAdmin)         return res.redirect('/admin');
+  if (req.session.isCoordinador)   return res.redirect('/coordenador');
+  next();
+}
+function requireCoordenador(req, res, next) {
+  if (!req.session.userId)       return res.redirect('/');
+  if (!req.session.isCoordinador) return res.redirect('/');
   next();
 }
 
 // ── Servir páginas ────────────────────────────────────────────────────────────
 app.get('/',      (_,   res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/base',  requireOperador, (_, res) => res.sendFile(path.join(__dirname, 'public', 'base.html')));
-app.get('/admin', requireAdmin,    (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/base',        requireOperador,    (_, res) => res.sendFile(path.join(__dirname, 'public', 'base.html')));
+app.get('/admin',       requireAdmin,       (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/coordenador', requireCoordenador, (_, res) => res.sendFile(path.join(__dirname, 'public', 'coordenador.html')));
 
 // ── Cron: verificar bases sem relatório até 10h ───────────────────────────────
 cron.schedule('0 10 * * 1-6', async () => {

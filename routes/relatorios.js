@@ -14,10 +14,23 @@ router.get('/', auth, async (req, res) => {
     const params = [];
     let where = 'WHERE 1=1';
 
-    if (!req.session.isAdmin) {
+    if (req.session.isCoordinador) {
+      // Coordenador: filtra pelas bases autorizadas
+      const bases = req.session.coordenadorBases || [];
+      if (bases.length === 0) return res.json([]);
+      params.push(bases);
+      where += ` AND r.base_id = ANY($${params.length}::int[])`;
+      // Permite refinamento por base específica se estiver na lista
+      if (base_id && bases.map(Number).includes(Number(base_id))) {
+        params.push(base_id);
+        where += ` AND r.base_id = $${params.length}`;
+      }
+    } else if (!req.session.isAdmin) {
+      // Operador/Base: apenas a sua base
       params.push(req.session.userId);
       where += ` AND r.base_id = $${params.length}`;
     } else if (base_id) {
+      // Admin/CEO: qualquer base
       params.push(base_id);
       where += ` AND r.base_id = $${params.length}`;
     }
@@ -62,7 +75,8 @@ router.get('/', auth, async (req, res) => {
 // ── Dashboard resumido (admin) ────────────────────────────────────────────────
 // IMPORTANTE: rotas com segmentos fixos devem vir ANTES de /:id
 router.get('/dashboard/resumo', auth, async (req, res) => {
-  if (!req.session.isAdmin) return res.status(403).json({ erro: 'Sem permissão.' });
+  if (!req.session.isAdmin && !req.session.isCoordinador)
+    return res.status(403).json({ erro: 'Sem permissão.' });
   try {
     const { data } = req.query;
     const dataRef  = data || new Date().toISOString().slice(0, 10);
@@ -72,9 +86,16 @@ router.get('/dashboard/resumo', auth, async (req, res) => {
     const agora = new Date();
     const horaAtual = agora.getHours();
 
-    const bases = await db.all(
-      "SELECT * FROM bases WHERE (is_admin = 0 OR is_admin IS NULL) AND ativo = 1"
-    );
+    let bases;
+    if (req.session.isCoordinador) {
+      const ids = req.session.coordenadorBases || [];
+      if (ids.length === 0) return res.json({ data: dataRef, bases: [], pendentes: [], rankingOcorrencias: [], rankingValores: [] });
+      const ph = ids.map((_, i) => `$${i + 1}`).join(',');
+      const r  = await db.pool.query(`SELECT * FROM bases WHERE id IN (${ph}) AND ativo = 1`, ids);
+      bases = r.rows;
+    } else {
+      bases = await db.all("SELECT * FROM bases WHERE (is_admin = 0 OR is_admin IS NULL) AND ativo = 1");
+    }
 
     // Buscar relatórios do dia
     const relatorios = await db.all(

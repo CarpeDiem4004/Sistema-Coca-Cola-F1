@@ -67,6 +67,7 @@
     <button class="nav-tab-btn" onclick="showTab('bases', this)"><i class="bi bi-building me-1"></i>Bases</button>
     <button class="nav-tab-btn" onclick="showTab('alertas', this)" id="tabBtnAlertas"><i class="bi bi-exclamation-triangle me-1"></i>Alertas</button>
     <button class="nav-tab-btn d-none" onclick="showTab('gerentes', this)" id="tabBtnGerentes"><i class="bi bi-shield-lock me-1"></i>Gerentes</button>
+    <button class="nav-tab-btn d-none" onclick="showTab('coordenadores', this)" id="tabBtnCoord"><i class="bi bi-diagram-3 me-1"></i>Coordenadores</button>
   </div>
 
   <!-- ════════════ DASHBOARD ════════════ -->
@@ -257,6 +258,24 @@
     <div id="listaAlertas"></div>
   </div>
 
+  <!-- ════════════ COORDENADORES ════════════ -->
+  <div id="tab-coordenadores" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="fw-bold mb-0"><i class="bi bi-diagram-3 text-danger me-2"></i>Coordenadores</h5>
+      <button class="btn btn-red btn-sm" data-bs-toggle="modal" data-bs-target="#modalCoordenador" onclick="abrirModalNovoCoord()">
+        <i class="bi bi-person-plus me-1"></i>Novo Coordenador
+      </button>
+    </div>
+    <div class="alert alert-info small mb-3">
+      <i class="bi bi-info-circle-fill me-2"></i>
+      Coordenadores acessam o painel <strong>/coordenador</strong> e visualizam apenas as bases atribuídas a eles.
+    </div>
+    <table class="table table-bordered table-hover">
+      <thead><tr><th>Nome</th><th>Usuário</th><th>Bases vinculadas</th><th>Status</th><th>Criado em</th><th></th></tr></thead>
+      <tbody id="tbCoord"></tbody>
+    </table>
+  </div>
+
   <!-- ════════════ GERENTES ════════════ -->
   <div id="tab-gerentes" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -363,6 +382,44 @@
   </div>
 </div>
 
+<!-- Modal: novo/editar coordenador -->
+<div class="modal fade" id="modalCoordenador" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cc-red)">
+        <h5 class="modal-title text-white fw-bold" id="tituloModalCoord"><i class="bi bi-diagram-3 me-2"></i>Novo Coordenador</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="alertaCoord" class="alert d-none"></div>
+        <input type="hidden" id="coordEditId" />
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Nome completo *</label>
+            <input type="text" id="cNome" class="form-control" placeholder="Ex: Carlos Silva" />
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Usuário de acesso *</label>
+            <input type="text" id="cUsuario" class="form-control" placeholder="Ex: carlos.coord" />
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Senha *</label>
+            <input type="password" id="cSenha" class="form-control" placeholder="Mínimo 6 caracteres" />
+          </div>
+        </div>
+        <hr />
+        <label class="form-label fw-semibold mb-2"><i class="bi bi-building me-1"></i>Bases vinculadas</label>
+        <div class="alert alert-light border small mb-2">Selecione quais bases este coordenador pode acompanhar:</div>
+        <div id="listaBasesCheckbox" class="row g-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-red" onclick="salvarCoordenador()"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: novo gerente -->
 <div class="modal fade" id="modalGerente" tabindex="-1">
   <div class="modal-dialog">
@@ -422,6 +479,7 @@ let isCeo = false;
   // Mostrar aba Gerentes apenas para CEO
   if (isCeo) {
     document.getElementById('tabBtnGerentes').classList.remove('d-none');
+    document.getElementById('tabBtnCoord').classList.remove('d-none');
   }
 
   // Mostrar nome do usuário na navbar
@@ -453,8 +511,9 @@ function showTab(tab, btn) {
   document.getElementById('tab-' + tab).classList.add('active');
   if (btn) btn.classList.add('active');
   else document.getElementById('tabBtnAlertas').classList.add('active');
-  if (tab === 'alertas')  carregarAlertas();
-  if (tab === 'gerentes') carregarGerentes();
+  if (tab === 'alertas')       carregarAlertas();
+  if (tab === 'gerentes')      carregarGerentes();
+  if (tab === 'coordenadores') carregarCoordenadores();
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -1005,6 +1064,120 @@ async function carregarAlertas() {
 async function marcarLido(id) {
   await fetch(`/api/relatorios/alertas/${id}/lido`, { method:'PUT' });
   await carregarAlertas();
+}
+
+// ── Coordenadores ─────────────────────────────────────────────────────────────
+let coordEditando = null;
+
+async function carregarCoordenadores() {
+  const rows = await fetch('/api/coordenadores').then(r => r.json());
+  const tb   = document.getElementById('tbCoord');
+  tb.innerHTML = rows.length === 0
+    ? '<tr><td colspan="6" class="text-center text-muted">Nenhum coordenador cadastrado</td></tr>'
+    : rows.map(c => `
+        <tr>
+          <td><strong>${c.nome}</strong></td>
+          <td><code>${c.usuario}</code></td>
+          <td class="text-center"><span class="badge bg-primary">${c.total_bases} base(s)</span></td>
+          <td><span class="badge ${c.ativo ? 'bg-success' : 'bg-secondary'}">${c.ativo ? 'Ativo' : 'Inativo'}</span></td>
+          <td><small class="text-muted">${new Date(c.criado_em).toLocaleDateString('pt-BR')}</small></td>
+          <td class="d-flex gap-1">
+            <button class="btn btn-outline-primary btn-sm" onclick="editarCoordenador(${c.id})" title="Editar bases">
+              <i class="bi bi-pencil me-1"></i>Editar
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="toggleCoord(${c.id}, ${c.ativo})">
+              <i class="bi bi-${c.ativo ? 'pause-circle' : 'play-circle'}"></i>
+            </button>
+            <button class="btn btn-outline-danger btn-sm" onclick="excluirCoord(${c.id}, '${c.nome.replace(/'/g,"\\'")}')">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>`).join('');
+}
+
+function abrirModalNovoCoord() {
+  coordEditando = null;
+  document.getElementById('tituloModalCoord').innerHTML = '<i class="bi bi-diagram-3 me-2"></i>Novo Coordenador';
+  document.getElementById('coordEditId').value = '';
+  document.getElementById('cNome').value    = '';
+  document.getElementById('cUsuario').value = '';
+  document.getElementById('cSenha').value   = '';
+  document.getElementById('cUsuario').disabled = false;
+  document.getElementById('alertaCoord').className = 'alert d-none';
+  renderCheckboxBases([]);
+}
+
+async function editarCoordenador(id) {
+  coordEditando = id;
+  const basesVinc = await fetch(`/api/coordenadores/${id}/bases`).then(r => r.json());
+  const idsVinc   = basesVinc.map(b => b.id);
+  const coord     = await fetch('/api/coordenadores').then(r => r.json()).then(arr => arr.find(c => c.id === id));
+
+  document.getElementById('tituloModalCoord').innerHTML = `<i class="bi bi-pencil me-2"></i>Editar: ${coord.nome}`;
+  document.getElementById('coordEditId').value  = id;
+  document.getElementById('cNome').value        = coord.nome;
+  document.getElementById('cUsuario').value     = coord.usuario;
+  document.getElementById('cUsuario').disabled  = true;
+  document.getElementById('cSenha').value       = '';
+  document.getElementById('alertaCoord').className = 'alert d-none';
+  renderCheckboxBases(idsVinc);
+  new bootstrap.Modal(document.getElementById('modalCoordenador')).show();
+}
+
+function renderCheckboxBases(selecionadas) {
+  const div = document.getElementById('listaBasesCheckbox');
+  div.innerHTML = basesCache.map(b => `
+    <div class="col-md-4 col-6">
+      <div class="form-check border rounded p-2 ${selecionadas.includes(b.id) ? 'bg-danger bg-opacity-10 border-danger' : ''}">
+        <input class="form-check-input cb-base" type="checkbox" value="${b.id}" id="cb_${b.id}"
+          ${selecionadas.includes(b.id) ? 'checked' : ''} />
+        <label class="form-check-label small fw-semibold" for="cb_${b.id}">
+          ${b.nome}<br><span class="text-muted fw-normal">${b.cidade||'—'}</span>
+        </label>
+      </div>
+    </div>`).join('');
+}
+
+async function salvarCoordenador() {
+  const alerta   = document.getElementById('alertaCoord');
+  const nome     = document.getElementById('cNome').value.trim();
+  const usuario  = document.getElementById('cUsuario').value.trim();
+  const senha    = document.getElementById('cSenha').value;
+  const base_ids = [...document.querySelectorAll('.cb-base:checked')].map(c => Number(c.value));
+  const editId   = document.getElementById('coordEditId').value;
+
+  if (!nome) { alerta.className='alert alert-danger'; alerta.textContent='Nome obrigatório.'; return; }
+  if (!editId && (!usuario || !senha)) { alerta.className='alert alert-danger'; alerta.textContent='Usuário e senha obrigatórios para novo coordenador.'; return; }
+
+  if (editId) {
+    // Atualizar
+    const body = { nome };
+    if (senha) body.senha = senha;
+    const r1 = await fetch(`/api/coordenadores/${editId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (!r1.ok) { const d = await r1.json(); alerta.className='alert alert-danger'; alerta.textContent=d.erro; return; }
+    await fetch(`/api/coordenadores/${editId}/bases`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ base_ids }) });
+  } else {
+    // Criar
+    const res  = await fetch('/api/coordenadores', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ nome, usuario, senha, base_ids }) });
+    const data = await res.json();
+    if (!res.ok) { alerta.className='alert alert-danger'; alerta.textContent=data.erro; return; }
+  }
+
+  alerta.className = 'alert alert-success';
+  alerta.textContent = editId ? 'Coordenador atualizado!' : 'Coordenador criado com sucesso!';
+  await carregarCoordenadores();
+  setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('modalCoordenador')).hide(), 1200);
+}
+
+async function toggleCoord(id, ativo) {
+  await fetch(`/api/coordenadores/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ativo: ativo ? 0 : 1 }) });
+  await carregarCoordenadores();
+}
+
+async function excluirCoord(id, nome) {
+  if (!confirm(`Excluir o coordenador "${nome}"?\nAs bases vinculadas serão desvinculadas automaticamente.`)) return;
+  await fetch(`/api/coordenadores/${id}`, { method:'DELETE' });
+  await carregarCoordenadores();
 }
 
 // ── Gerentes ──────────────────────────────────────────────────────────────────

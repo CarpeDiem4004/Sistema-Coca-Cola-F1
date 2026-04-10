@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Coca-Cola F1 – Painel do Coordenador</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <style>
+    :root { --cc-red: #d40000; }
+    body  { background: #f0f0f0; }
+    .navbar { background: var(--cc-red) !important; }
+    .navbar-brand { font-weight: 900; letter-spacing: 1px; font-size: 1.3rem; }
+    .nav-tab-btn { cursor:pointer; padding:8px 18px; border-radius:8px 8px 0 0; background:#ddd; border:none; font-weight:600; color:#333; }
+    .nav-tab-btn.active { background: var(--cc-red); color: #fff; }
+    .section { display:none; } .section.active { display:block; }
+    .btn-red { background: var(--cc-red); color: #fff; border: none; }
+    .btn-red:hover { background: #b50000; color: #fff; }
+    table th { background: #f8d7d7; }
+    .kpi-card { border-left: 4px solid var(--cc-red); border-radius: 8px; background: #fff; padding: 14px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+    .kpi-val  { font-size: 2rem; font-weight: 900; line-height: 1; }
+    .kpi-lbl  { font-size: .78rem; color: #666; text-transform: uppercase; letter-spacing: .5px; }
+    .base-card { border-radius: 10px; background:#fff; box-shadow:0 1px 8px rgba(0,0,0,.07); overflow:hidden; }
+    .base-card .bc-head { padding:10px 14px; display:flex; justify-content:space-between; align-items:center; }
+    .bc-postou   { border-left: 4px solid #28a745; }
+    .bc-pendente { border-left: 4px solid #dc3545; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark px-3 py-2">
+  <span class="navbar-brand"><i class="bi bi-person-badge me-2"></i>Coca-Cola F1</span>
+  <div class="d-flex align-items-center gap-3">
+    <span class="badge bg-warning text-dark"><i class="bi bi-diagram-3 me-1"></i>Coordenador</span>
+    <span class="text-white fw-semibold" id="nomeCoord"></span>
+    <input type="date" id="dataFiltro" class="form-control form-control-sm" style="width:150px" />
+    <button class="btn btn-outline-light btn-sm" onclick="logout()"><i class="bi bi-box-arrow-right me-1"></i>Sair</button>
+  </div>
+</nav>
+
+<div class="container-fluid py-4 px-4">
+
+  <!-- Tabs -->
+  <div class="d-flex gap-2 mb-0">
+    <button class="nav-tab-btn active" onclick="showTab('dashboard',this)"><i class="bi bi-grid-1x2 me-1"></i>Dashboard</button>
+    <button class="nav-tab-btn" onclick="showTab('relatorios',this)"><i class="bi bi-file-earmark-text me-1"></i>Relatórios</button>
+  </div>
+
+  <!-- ════════════ DASHBOARD ════════════ -->
+  <div id="tab-dashboard" class="section active bg-white rounded-bottom rounded-end p-4 shadow-sm">
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="kpi-card" style="border-color:#0d6efd">
+          <div class="kpi-val text-primary" id="kpiTotalBases">—</div>
+          <div class="kpi-lbl"><i class="bi bi-building me-1"></i>Minhas Bases</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="kpi-card" style="border-color:#28a745">
+          <div class="kpi-val text-success" id="kpiPostaram">—</div>
+          <div class="kpi-lbl"><i class="bi bi-check-circle me-1"></i>Postaram</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="kpi-card" style="border-color:#dc3545">
+          <div class="kpi-val text-danger" id="kpiPendentes">—</div>
+          <div class="kpi-lbl"><i class="bi bi-clock me-1"></i>Pendentes</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="kpi-card" style="border-color:#fd7e14">
+          <div class="kpi-val text-warning" id="kpiDesconto">—</div>
+          <div class="kpi-lbl"><i class="bi bi-cash-coin me-1"></i>Total Desconto</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Barra de progresso -->
+    <div class="mb-4">
+      <div class="d-flex justify-content-between mb-1">
+        <span class="fw-semibold">Progresso de postagem</span>
+        <span id="pctPostagem" class="text-muted small"></span>
+      </div>
+      <div class="progress" style="height:10px;border-radius:5px">
+        <div id="barPostagem" class="progress-bar bg-success" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Cards das bases -->
+    <h6 class="fw-bold text-danger mb-3"><i class="bi bi-building me-1"></i>Status das Minhas Bases</h6>
+    <div class="row g-3" id="cardsBases"></div>
+  </div>
+
+  <!-- ════════════ RELATÓRIOS ════════════ -->
+  <div id="tab-relatorios" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
+
+    <!-- Filtros -->
+    <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+      <div>
+        <label class="form-label small fw-semibold mb-1">Base</label>
+        <select id="filtroBase" class="form-select form-select-sm" style="width:200px" onchange="carregarRelatorios()">
+          <option value="">Todas as minhas bases</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">De</label>
+        <input type="date" id="filtroDataDe" class="form-control form-control-sm" style="width:145px" onchange="carregarRelatorios()" />
+      </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">Até</label>
+        <input type="date" id="filtroDataAte" class="form-control form-control-sm" style="width:145px" onchange="carregarRelatorios()" />
+      </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select id="filtroStatus" class="form-select form-select-sm" style="width:160px" onchange="carregarRelatorios()">
+          <option value="">Todos</option>
+          <option value="em_andamento">Em andamento</option>
+          <option value="finalizado">Finalizado</option>
+        </select>
+      </div>
+      <div class="ms-auto">
+        <button class="btn btn-success btn-sm" onclick="exportarCSV()">
+          <i class="bi bi-download me-1"></i>Exportar CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="d-flex gap-3 mb-3 flex-wrap" id="resumoRels"></div>
+
+    <!-- Tabela -->
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Base</th><th>Data Ref.</th><th>Postado em</th>
+            <th class="text-center">Rotas</th>
+            <th class="text-center">Ocorrências</th>
+            <th class="text-end">Vl. Total F1</th>
+            <th class="text-center">Status</th>
+            <th class="text-center">Ver</th>
+          </tr>
+        </thead>
+        <tbody id="tbRelatorios"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: detalhe -->
+<div class="modal fade" id="modalDetalhe" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cc-red)">
+        <h5 class="modal-title text-white fw-bold"><i class="bi bi-file-earmark-bar-graph me-2"></i>Detalhe do Relatório</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="corpoDetalhe"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let minhasBases = [];
+let relsCache   = [];
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+(async () => {
+  const me = await fetch('/api/auth/me').then(r => r.json()).catch(() => null);
+  if (!me || me.erro || !me.isCoordinador) { window.location.href = '/'; return; }
+  document.getElementById('nomeCoord').textContent = me.nome;
+
+  // Data padrão = ontem
+  const ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
+  document.getElementById('dataFiltro').value = ontem.toISOString().slice(0,10);
+  document.getElementById('dataFiltro').addEventListener('change', carregarDashboard);
+
+  // Filtros de relatório: últimos 30 dias
+  const hoje = new Date(), ha30 = new Date();
+  ha30.setDate(ha30.getDate() - 30);
+  document.getElementById('filtroDataAte').value = hoje.toISOString().slice(0,10);
+  document.getElementById('filtroDataDe').value  = ha30.toISOString().slice(0,10);
+
+  // Carregar bases
+  const basesRes = await fetch('/api/coordenadores/minhas-bases').then(r => r.json());
+  minhasBases = basesRes;
+  const sel = document.getElementById('filtroBase');
+  sel.innerHTML = '<option value="">Todas as minhas bases</option>' +
+    minhasBases.map(b => `<option value="${b.id}">${b.nome}</option>`).join('');
+
+  await Promise.all([carregarDashboard(), carregarRelatorios()]);
+  setInterval(() => carregarDashboard(), 5 * 60 * 1000);
+})();
+
+function showTab(tab, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+function fmtBRL(v) {
+  return 'R$ ' + Number(v||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+async function carregarDashboard() {
+  const data   = document.getElementById('dataFiltro').value;
+  const resumo = await fetch(`/api/relatorios/dashboard/resumo?data=${data}`).then(r => r.json());
+
+  const postaram    = resumo.bases.filter(b => b.postou).length;
+  const naoPostaram = resumo.bases.filter(b => !b.postou).length;
+  const total       = resumo.bases.length;
+  const pct         = total ? Math.round((postaram / total) * 100) : 0;
+  const totalDesc   = resumo.bases.reduce((s, b) => s + Number(b.valor_total||0), 0);
+
+  document.getElementById('kpiTotalBases').textContent = total;
+  document.getElementById('kpiPostaram').textContent   = postaram;
+  document.getElementById('kpiPendentes').textContent  = naoPostaram;
+  document.getElementById('kpiDesconto').textContent   = fmtBRL(totalDesc);
+  document.getElementById('pctPostagem').textContent   = `${postaram}/${total} bases (${pct}%)`;
+  document.getElementById('barPostagem').style.width   = pct + '%';
+
+  document.getElementById('cardsBases').innerHTML = resumo.bases.map(b => `
+    <div class="col-md-4 col-lg-3">
+      <div class="base-card ${b.postou ? 'bc-postou' : 'bc-pendente'}">
+        <div class="bc-head">
+          <div>
+            <div class="fw-bold">${b.base_nome}</div>
+            <small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${b.cidade||'—'}</small>
+          </div>
+          <span class="badge ${b.postou ? 'bg-success' : 'bg-danger'} rounded-pill">
+            <i class="bi bi-${b.postou ? 'check-circle' : 'clock'} me-1"></i>${b.postou ? 'Postou' : 'Pendente'}
+          </span>
+        </div>
+        <div class="px-3 pb-3">
+          ${b.postou ? `
+            <div class="d-flex justify-content-between mb-1">
+              <small class="text-muted">Postado às</small>
+              <strong class="text-success small">${new Date(b.postado_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+              <small class="text-muted">Ocorrências</small>
+              <span class="badge ${(b.ocorrencias||0) > 0 ? 'bg-danger' : 'bg-success'}">${b.ocorrencias||0}</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <small class="text-muted">Total desconto</small>
+              <strong class="${(b.valor_total||0) > 0 ? 'text-danger' : 'text-muted'} small">${fmtBRL(b.valor_total)}</strong>
+            </div>
+            <button class="btn btn-outline-danger btn-sm w-100 py-1" style="font-size:.8rem" onclick="verRelatorioBase(${b.base_id})">
+              <i class="bi bi-eye me-1"></i>Ver Relatório
+            </button>
+          ` : `
+            <div class="text-center py-3 text-danger">
+              <i class="bi bi-hourglass-split fs-4 d-block mb-1"></i>
+              <small>Aguardando relatório</small>
+            </div>
+          `}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Relatórios ────────────────────────────────────────────────────────────────
+async function carregarRelatorios() {
+  const baseId  = document.getElementById('filtroBase').value;
+  const dataDe  = document.getElementById('filtroDataDe').value;
+  const dataAte = document.getElementById('filtroDataAte').value;
+  const status  = document.getElementById('filtroStatus').value;
+
+  let url = '/api/relatorios?';
+  if (baseId)  url += `base_id=${baseId}&`;
+  if (dataDe)  url += `data_de=${dataDe}&`;
+  if (dataAte) url += `data_ate=${dataAte}&`;
+  if (status)  url += `status=${status}&`;
+
+  relsCache = await fetch(url).then(r => r.json());
+  const tb  = document.getElementById('tbRelatorios');
+
+  const totR  = relsCache.length;
+  const totRt = relsCache.reduce((s,r) => s + Number(r.total_rotas||0), 0);
+  const fin   = relsCache.filter(r => r.status === 'finalizado').length;
+
+  document.getElementById('resumoRels').innerHTML = `
+    <span class="badge bg-secondary fs-6 fw-normal px-3 py-2">${totR} relatório(s)</span>
+    <span class="badge bg-primary fs-6 fw-normal px-3 py-2">${totRt} rota(s)</span>
+    <span class="badge bg-success fs-6 fw-normal px-3 py-2">${fin} finalizado(s)</span>
+  `;
+
+  tb.innerHTML = relsCache.length === 0
+    ? '<tr><td colspan="8" class="text-center text-muted py-4">Nenhum relatório encontrado</td></tr>'
+    : relsCache.map(r => {
+        const fin = r.status === 'finalizado';
+        return `<tr>
+          <td><strong>${r.base_nome}</strong><br><small class="text-muted">${r.cidade||'—'}</small></td>
+          <td class="fw-semibold">${r.data_referencia}</td>
+          <td><small>${new Date(r.postado_em).toLocaleString('pt-BR')}</small></td>
+          <td class="text-center"><span class="badge bg-secondary">${r.total_rotas}</span></td>
+          <td class="text-center"><span class="badge ${Number(r.total_ocorrencias||0) > 0 ? 'bg-danger' : 'bg-success'}">${r.total_ocorrencias||0}</span></td>
+          <td class="text-end fw-bold ${Number(r.total_valor_f1||0) > 0 ? 'text-danger' : 'text-muted'}">${fmtBRL(r.total_valor_f1)}</td>
+          <td class="text-center">${fin
+            ? '<span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>'
+            : '<span class="badge bg-success"><i class="bi bi-pencil me-1"></i>Em andamento</span>'}</td>
+          <td class="text-center">
+            <button class="btn btn-outline-danger btn-sm px-2" onclick="verDetalhe(${r.id})"><i class="bi bi-eye"></i></button>
+          </td>
+        </tr>`;
+      }).join('');
+}
+
+async function verRelatorioBase(baseId) {
+  const data = document.getElementById('dataFiltro').value;
+  const rels = await fetch(`/api/relatorios?data=${data}&base_id=${baseId}`).then(r => r.json());
+  if (rels.length > 0) verDetalhe(rels[0].id);
+}
+
+const STATUS_INFO = {
+  nenhum:      { label:'Sem desconto',    cor:'#6c757d' },
+  motorista:   { label:'Desc. Motorista', cor:'#dc3545' },
+  equipe:      { label:'Desc. Equipe',    cor:'#fd7e14' },
+  abonar:      { label:'Abonado',         cor:'#198754' },
+  regularizado:{ label:'Regularizado',    cor:'#0d6efd' },
+  pago:        { label:'Pago',            cor:'#6610f2' },
+};
+
+async function verDetalhe(id) {
+  const rel = await fetch(`/api/relatorios/${id}`).then(r => r.json());
+  let html = `<p class="fw-bold text-danger mb-3">${rel.base_nome} — ${rel.cidade||''} | Ref: ${rel.data_referencia} | Postado: ${new Date(rel.postado_em).toLocaleString('pt-BR')}</p>`;
+  html += `<div class="table-responsive"><table class="table table-bordered table-sm align-middle">
+    <thead><tr><th>Nº Transp.</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th><th>Mercadorias Faltando</th><th>Status Desconto</th><th>Vl. F1</th><th>Motivo</th></tr></thead><tbody>`;
+  for (const r of rel.rotas) {
+    const inf = STATUS_INFO[r.status_desconto] || { label: r.status_desconto||'—', cor:'#999' };
+    html += `<tr>
+      <td><strong>${r.numero_rota}</strong></td>
+      <td>${r.numero_f1||'—'}</td>
+      <td>${r.motorista_nome||'—'}</td>
+      <td>${r.ajudante_nome||'—'}</td>
+      <td>${r.ajudante2_nome||'—'}</td>
+      <td>${r.mercadorias_faltando||'—'}</td>
+      <td><span style="color:${inf.cor};font-weight:600">${inf.label}</span></td>
+      <td class="text-danger fw-bold">${Number(r.valor_desconto||0) > 0 ? fmtBRL(r.valor_desconto) : '—'}</td>
+      <td>${r.motivo_desconto||'—'}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  document.getElementById('corpoDetalhe').innerHTML = html;
+  new bootstrap.Modal(document.getElementById('modalDetalhe')).show();
+}
+
+async function exportarCSV() {
+  if (relsCache.length === 0) { alert('Nenhum relatório para exportar.'); return; }
+  const linhas = [['Base','Cidade','Data Ref.','Postado em','Status','Nº Transporte','Nº F1','Motorista','Ajudante 1','Ajudante 2','Mercadorias Faltando','Status Desconto','Vl. F1 (R$)','Motivo']];
+  for (const r of relsCache) {
+    const det = await fetch(`/api/relatorios/${r.id}`).then(x => x.json());
+    for (const rt of det.rotas) {
+      const inf = STATUS_INFO[rt.status_desconto] || { label: rt.status_desconto||'' };
+      linhas.push([det.base_nome, det.cidade||'', det.data_referencia,
+        new Date(det.postado_em).toLocaleString('pt-BR'),
+        det.status === 'finalizado' ? 'Finalizado' : 'Em andamento',
+        rt.numero_rota||'', rt.numero_f1||'',
+        rt.motorista_nome||'', rt.ajudante_nome||'', rt.ajudante2_nome||'',
+        rt.mercadorias_faltando||'', inf.label,
+        Number(rt.valor_desconto||0).toFixed(2).replace('.',','),
+        rt.motivo_desconto||'']);
+    }
+  }
+  const csv  = linhas.map(l => l.map(c => `"${String(c).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a'); a.href=url;
+  a.download = `coord_f1_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/';
+}
+</script>
+</body>
+</html>
