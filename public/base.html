@@ -896,7 +896,7 @@ async function buscarFuncionario() {
 // ── Detalhe do relatório ─────────────────────────────────────────────────────
 async function verDetalhe(id) {
   const rel = await fetch(`/api/relatorios/${id}`).then(r => r.json());
-  const emAndamento = rel.status === 'em_andamento';
+  const emAndamento = !rel.status || rel.status === 'em_andamento';
 
   let html = `<p class="fw-bold text-danger mb-2">Data: ${rel.data_referencia} — ${rel.base_nome} / ${rel.cidade || ''}</p>`;
   if (emAndamento) {
