@@ -597,13 +597,6 @@ function addRota() {
         <input type="text" class="form-control form-control-sm reg-valor" placeholder="R$ 0,00"
                oninput="mascaraMoeda(this)" />
       </div>
-      <div class="col-md-2 mt-2">
-        <label class="form-label small fw-semibold mb-1"><i class="bi bi-flag me-1"></i>Situação</label>
-        <select class="form-select form-select-sm reg-situacao">
-          <option value="em_andamento">🟢 Em andamento</option>
-          <option value="finalizado">⚫ Finalizado</option>
-        </select>
-      </div>
     </div>`;
   document.getElementById('regRotas').appendChild(div);
 
@@ -654,7 +647,6 @@ async function enviarRegistro() {
       mercadorias_faltando:  bloco.querySelector('.reg-mercadorias').value.trim() || null,
       status_desconto:       bloco.querySelector('.reg-status').value,
       valor_desconto:        parseMoeda(bloco.querySelector('.reg-valor')?.value || '0'),
-      situacao:              bloco.querySelector('.reg-situacao').value || 'em_andamento',
     });
   }
 
