@@ -445,22 +445,14 @@ router.post('/', auth, async (req, res) => {
       'SELECT id, status FROM relatorios WHERE base_id = ? AND data_referencia = ?',
       [baseId, data_referencia]
     );
-    if (jaExiste) {
-      if (jaExiste.status === 'finalizado')
-        return res.status(409).json({ erro: 'finalizado', msg: 'Este relatório está finalizado e não pode ser alterado.' });
-      return res.status(409).json({ erro: 'Já existe relatório para esta data.' });
-    }
 
-    // Auditoria: quem está criando
-    const criadoPorTipo = tipoAtor(req.session);
-    const criadoPorNome = req.session.nome || req.session.usuario;
+    // ── Relatório finalizado → bloquear ───────────────────────────────────────
+    if (jaExiste && jaExiste.status === 'finalizado')
+      return res.status(409).json({ erro: 'finalizado', msg: 'Este relatório está finalizado e não pode ser alterado.' });
 
-    const relId = await db.transaction(async (client) => {
+    // Helper para inserir rotas (reutilizado nos dois casos abaixo)
+    async function inserirRotas(client, relatorioId) {
       const c = db.clientWrapper(client);
-      const rel = await c.run(
-        'INSERT INTO relatorios (base_id, data_referencia, criado_por_tipo, criado_por_nome) VALUES (?, ?, ?, ?)',
-        [baseId, data_referencia, criadoPorTipo, criadoPorNome]
-      );
       for (const r of rotas) {
         await c.run(`
           INSERT INTO rotas
@@ -471,7 +463,7 @@ router.post('/', auth, async (req, res) => {
              valor_desconto, motivo_desconto, comprovante_url)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-          rel.lastInsertRowid,
+          relatorioId,
           r.numero_rota,
           r.numero_f1            || null,
           r.motorista_id         || null,
@@ -486,10 +478,31 @@ router.post('/', auth, async (req, res) => {
           r.comprovante_url      || null
         ]);
       }
+    }
+
+    // ── Relatório em andamento → ADICIONAR rotas ao existente ─────────────────
+    if (jaExiste) {
+      await db.transaction(async (client) => {
+        await inserirRotas(client, jaExiste.id);
+      });
+      return res.json({ id: jaExiste.id, ok: true, adicionado: true });
+    }
+
+    // ── Sem relatório → criar novo ────────────────────────────────────────────
+    const criadoPorTipo = tipoAtor(req.session);
+    const criadoPorNome = req.session.nome || req.session.usuario;
+
+    const relId = await db.transaction(async (client) => {
+      const c = db.clientWrapper(client);
+      const rel = await c.run(
+        'INSERT INTO relatorios (base_id, data_referencia, criado_por_tipo, criado_por_nome) VALUES (?, ?, ?, ?)',
+        [baseId, data_referencia, criadoPorTipo, criadoPorNome]
+      );
+      await inserirRotas(client, rel.lastInsertRowid);
       return rel.lastInsertRowid;
     });
 
-    res.json({ id: relId, ok: true });
+    res.json({ id: relId, ok: true, adicionado: false });
   } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
 });
 

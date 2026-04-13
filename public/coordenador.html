@@ -661,21 +661,22 @@ async function enviarRegistro() {
       if (data2.erro === 'finalizado') {
         document.getElementById('regBloqueado').classList.remove('d-none');
         document.getElementById('regJaExiste').classList.add('d-none');
-      } else if (data2.erro?.includes('Já existe')) {
-        document.getElementById('regJaExiste').classList.remove('d-none');
-        document.getElementById('regBloqueado').classList.add('d-none');
       } else {
-        alert(data2.erro || 'Erro ao enviar relatório.');
+        alert(data2.msg || data2.erro || 'Erro ao enviar relatório.');
       }
     } else {
-      document.getElementById('regMsgSucesso').classList.remove('d-none');
+      const msgEl = document.getElementById('regMsgSucesso');
+      msgEl.innerHTML = data2.adicionado
+        ? `<i class="bi bi-plus-circle me-2"></i>${rotas.length} F1(s) adicionada(s) ao relatório do dia!`
+        : `<i class="bi bi-check-circle me-2"></i>Relatório enviado com sucesso!`;
+      msgEl.classList.remove('d-none');
       document.getElementById('regJaExiste').classList.add('d-none');
       document.getElementById('regBloqueado').classList.add('d-none');
       // Limpar rotas e adicionar uma nova
       document.getElementById('regRotas').innerHTML = '';
       contadorRota = 0;
       addRota();
-      setTimeout(() => document.getElementById('regMsgSucesso').classList.add('d-none'), 4000);
+      setTimeout(() => msgEl.classList.add('d-none'), 4000);
       carregarDashboard();
       carregarRelatorios();
     }

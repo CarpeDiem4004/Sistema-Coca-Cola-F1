@@ -521,7 +521,7 @@ async function verificarData() {
     aviso.classList.toggle('d-none', finalizado);
 
     if (!finalizado) {
-      aviso.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>Relatório já enviado para <strong>${data}</strong> em ${new Date(rel.postado_em).toLocaleString('pt-BR')}.`;
+      aviso.innerHTML = `<i class="bi bi-info-circle-fill me-2"></i>Já existe relatório para <strong>${data}</strong> (postado às ${new Date(rel.postado_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}). <strong>Você pode adicionar mais F1s abaixo.</strong>`;
     }
 
     // Bloquear formulário se finalizado
@@ -621,8 +621,17 @@ async function enviarRelatorio() {
 
   const res  = await fetch('/api/relatorios', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data_referencia: dataRef, rotas }) });
   const data = await res.json();
-  if (!res.ok) { mostrarAlerta(alerta, 'danger', data.erro); return; }
-  mostrarAlerta(alerta, 'success', 'Relatório enviado com sucesso!');
+  if (!res.ok) { mostrarAlerta(alerta, 'danger', data.msg || data.erro); return; }
+
+  const msg = data.adicionado
+    ? `✅ ${rotas.length} F1(s) adicionada(s) ao relatório do dia!`
+    : '✅ Relatório enviado com sucesso!';
+  mostrarAlerta(alerta, 'success', msg);
+
+  // Limpar rotas preenchidas e deixar uma nova em branco
+  document.getElementById('listaRotas').innerHTML = '';
+  addRota();
+
   await verificarData();
   await carregarHistorico();
 }
