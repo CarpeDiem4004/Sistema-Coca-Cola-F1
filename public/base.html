@@ -554,30 +554,77 @@ async function enviarRelatorio() {
 
   if (!dataRef) { mostrarAlerta(alerta, 'danger', 'Informe a data de referência.'); return; }
 
+  const btnEnviar = document.getElementById('btnEnviar');
+  btnEnviar.disabled = true;
+  btnEnviar.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando...';
+
   mostrarAlerta(alerta, 'success', 'Enviando arquivos...');
-  for (const c of cartoes) {
+  let uploadFalhou = false;
+
+  for (const [idx, c] of [...cartoes].entries()) {
+    const rotaNum = c.querySelector('.inp-rota').value.trim() || `#${idx + 1}`;
+
     const nfFile = c.querySelector('.inp-nf-file');
     const nfUrl  = c.querySelector('.inp-nf-url');
     const nfSt   = c.querySelector('.inp-nf-upload-status');
     if (nfFile?.files[0] && !nfUrl.value) {
       nfSt.textContent = '⏳';
-      const fd = new FormData(); fd.append('nf', nfFile.files[0]);
-      const up = await fetch('/api/upload/nf', { method:'POST', body: fd });
-      const ud = await up.json();
-      if (up.ok) { nfUrl.value = ud.url; nfSt.textContent = '✅'; }
-      else { nfSt.textContent = '❌'; }
+      try {
+        const fd = new FormData(); fd.append('nf', nfFile.files[0]);
+        const up = await fetch('/api/upload/nf', { method:'POST', body: fd });
+        const ud = await up.json();
+        if (up.ok) {
+          nfUrl.value = ud.url;
+          nfSt.textContent = '✅';
+        } else {
+          nfSt.textContent = '❌ Falha';
+          mostrarAlerta(alerta, 'danger',
+            `Erro ao fazer upload da NF da rota ${rotaNum}: ${ud.erro || 'Falha no armazenamento'}. Relatório NÃO enviado.<br>` +
+            `<small>Verifique se as variáveis SUPABASE_URL e SUPABASE_SERVICE_KEY estão configuradas no Railway.</small>`);
+          uploadFalhou = true;
+          break;
+        }
+      } catch (e) {
+        nfSt.textContent = '❌ Erro';
+        mostrarAlerta(alerta, 'danger', `Erro de conexão ao fazer upload da NF (Rota ${rotaNum}). Relatório NÃO enviado.`);
+        uploadFalhou = true;
+        break;
+      }
     }
+
     const compFile = c.querySelector('.inp-comp-file');
     const compUrl  = c.querySelector('.inp-comp-url');
     const compSt   = c.querySelector('.inp-comp-upload-status');
     if (compFile?.files[0] && !compUrl.value) {
       compSt.textContent = '⏳';
-      const fd = new FormData(); fd.append('nf', compFile.files[0]);
-      const up = await fetch('/api/upload/nf', { method:'POST', body: fd });
-      const ud = await up.json();
-      if (up.ok) { compUrl.value = ud.url; compSt.textContent = '✅'; }
-      else { compSt.textContent = '❌'; }
+      try {
+        const fd = new FormData(); fd.append('nf', compFile.files[0]);
+        const up = await fetch('/api/upload/nf', { method:'POST', body: fd });
+        const ud = await up.json();
+        if (up.ok) {
+          compUrl.value = ud.url;
+          compSt.textContent = '✅';
+        } else {
+          compSt.textContent = '❌ Falha';
+          mostrarAlerta(alerta, 'danger',
+            `Erro ao fazer upload do comprovante da rota ${rotaNum}: ${ud.erro || 'Falha no armazenamento'}. Relatório NÃO enviado.<br>` +
+            `<small>Verifique se as variáveis SUPABASE_URL e SUPABASE_SERVICE_KEY estão configuradas no Railway.</small>`);
+          uploadFalhou = true;
+          break;
+        }
+      } catch (e) {
+        compSt.textContent = '❌ Erro';
+        mostrarAlerta(alerta, 'danger', `Erro de conexão ao fazer upload do comprovante (Rota ${rotaNum}). Relatório NÃO enviado.`);
+        uploadFalhou = true;
+        break;
+      }
     }
+  }
+
+  if (uploadFalhou) {
+    btnEnviar.disabled = false;
+    btnEnviar.innerHTML = '<i class="bi bi-send-fill me-2"></i>Enviar Relatório';
+    return;
   }
 
   const rotas = [...cartoes].map(c => {
@@ -605,35 +652,46 @@ async function enviarRelatorio() {
     };
   });
 
-  if (rotas.some(r => !r.numero_rota)) { mostrarAlerta(alerta, 'danger', 'Preencha o número de todas as rotas.'); return; }
+  function reativarBotao() {
+    btnEnviar.disabled = false;
+    btnEnviar.innerHTML = '<i class="bi bi-send-fill me-2"></i>Enviar Relatório';
+  }
+
+  if (rotas.some(r => !r.numero_rota)) { mostrarAlerta(alerta, 'danger', 'Preencha o número de todas as rotas.'); reativarBotao(); return; }
 
   const semComprovante = rotas.map((r,i)=>({...r,idx:i+1})).filter(r => r.status_desconto === 'pago' && !r.comprovante_url);
   if (semComprovante.length > 0) {
     mostrarAlerta(alerta, 'danger', `Status "Pago" exige comprovante: ${semComprovante.map(r=>`Rota #${r.idx}`).join(', ')}`);
-    return;
+    reativarBotao(); return;
   }
 
   const semMotivo = rotas.map((r,i)=>({...r,idx:i+1})).filter(r => ['motorista','equipe','abonar','regularizado'].includes(r.status_desconto) && !r.motivo_desconto);
   if (semMotivo.length > 0) {
     mostrarAlerta(alerta, 'danger', `Justificativa obrigatória: ${semMotivo.map(r=>`Rota #${r.idx}`).join(', ')}`);
-    return;
+    reativarBotao(); return;
   }
 
-  const res  = await fetch('/api/relatorios', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data_referencia: dataRef, rotas }) });
-  const data = await res.json();
-  if (!res.ok) { mostrarAlerta(alerta, 'danger', data.msg || data.erro); return; }
+  try {
+    const res  = await fetch('/api/relatorios', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data_referencia: dataRef, rotas }) });
+    const data = await res.json();
+    if (!res.ok) { mostrarAlerta(alerta, 'danger', data.msg || data.erro); reativarBotao(); return; }
 
-  const msg = data.adicionado
-    ? `✅ ${rotas.length} F1(s) adicionada(s) ao relatório do dia!`
-    : '✅ Relatório enviado com sucesso!';
-  mostrarAlerta(alerta, 'success', msg);
+    const msg = data.adicionado
+      ? `✅ ${rotas.length} F1(s) adicionada(s) ao relatório do dia!`
+      : '✅ Relatório enviado com sucesso!';
+    mostrarAlerta(alerta, 'success', msg);
 
-  // Limpar rotas preenchidas e deixar uma nova em branco
-  document.getElementById('listaRotas').innerHTML = '';
-  addRota();
+    // Limpar rotas preenchidas e deixar uma nova em branco
+    document.getElementById('listaRotas').innerHTML = '';
+    addRota();
 
-  await verificarData();
-  await carregarHistorico();
+    await verificarData();
+    await carregarHistorico();
+  } catch (e) {
+    mostrarAlerta(alerta, 'danger', 'Erro de conexão ao enviar o relatório. Tente novamente.');
+  } finally {
+    reativarBotao();
+  }
 }
 
 function mostrarAlerta(el, tipo, msg) {
