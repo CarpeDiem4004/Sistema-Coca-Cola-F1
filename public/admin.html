@@ -914,12 +914,18 @@ async function verDetalhe(id) {
 
   html += `<div class="table-responsive"><table class="table table-bordered table-sm align-middle">
     <thead><tr>
-      <th>Rota</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th>
+      <th>Situação</th><th>Rota</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th>
       <th>Mercadorias Faltando</th><th>NF</th><th>Status Desconto</th><th>Vl.Desconto</th><th>Motivo/Justificativa</th><th>Comprovante</th>
     </tr></thead><tbody>`;
 
   for (const r of rel.rotas) {
-    html += `<tr class="${r.desconto_equipe ? 'table-warning' : ''}">
+    const rotaFinalizada = r.situacao === 'finalizado';
+    const situacaoBadge = rotaFinalizada
+      ? `<span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>`
+      : `<span class="badge bg-success"><i class="bi bi-pencil me-1"></i>Em andamento</span>`;
+
+    html += `<tr class="${rotaFinalizada ? 'table-light text-muted' : r.desconto_equipe ? 'table-warning' : ''}">
+      <td>${situacaoBadge}</td>
       <td><strong>${r.numero_rota}</strong></td>
       <td>${r.numero_f1||'—'}</td>
       <td>${r.motorista_nome||'—'}</td>
