@@ -534,8 +534,9 @@ router.post('/', auth, async (req, res) => {
              motorista_id, ajudante_id, ajudante2_id,
              mercadorias_faltando, nf_url,
              status_desconto, desconto_equipe,
-             valor_desconto, motivo_desconto, comprovante_url)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             valor_desconto, motivo_desconto, comprovante_url,
+             situacao)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           relatorioId,
           r.numero_rota,
@@ -549,7 +550,8 @@ router.post('/', auth, async (req, res) => {
           r.desconto_equipe      || 0,
           r.valor_desconto       || 0,
           r.motivo_desconto      || null,
-          r.comprovante_url      || null
+          r.comprovante_url      || null,
+          ['em_andamento','finalizado'].includes(r.situacao) ? r.situacao : 'em_andamento'
         ]);
       }
     }

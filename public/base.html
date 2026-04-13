@@ -394,7 +394,7 @@ function addRota() {
           oninput="mascaraMoeda(this); atualizarDesconto(this.closest('.rota-card'))" />
         <div class="inp-valor-por-pessoa text-danger small mt-1 d-none"></div>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label class="form-label small fw-semibold">Status do Desconto</label>
         <select class="form-select form-select-sm sel-status-desconto"
           onchange="atualizarStatusDesconto(this.closest('.rota-card'))">
@@ -404,6 +404,13 @@ function addRota() {
           <option value="abonar">✅ Abonar</option>
           <option value="regularizado">🔄 Regularizado</option>
           <option value="pago">💳 Pago</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold"><i class="bi bi-flag me-1"></i>Situação</label>
+        <select class="form-select form-select-sm sel-situacao">
+          <option value="em_andamento">🟢 Em andamento</option>
+          <option value="finalizado">⚫ Finalizado</option>
         </select>
       </div>
     </div>
@@ -643,6 +650,7 @@ async function enviarRelatorio() {
       ajudante2_id:         c.querySelector('.sel-ajudante2').value      || null,
       mercadorias_faltando: c.querySelector('.inp-faltando').value.trim()|| null,
       nf_url:               c.querySelector('.inp-nf-url').value         || null,
+      situacao:             c.querySelector('.sel-situacao').value        || 'em_andamento',
       status_desconto:      status,
       desconto_equipe:      ['motorista','equipe'].includes(status) ? 1 : 0,
       valor_desconto:       valor,
