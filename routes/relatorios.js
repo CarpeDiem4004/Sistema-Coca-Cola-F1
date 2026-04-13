@@ -384,6 +384,48 @@ router.put('/alertas/:id/lido', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
+// ── Editar anexos de uma rota (só relatórios em_andamento) ───────────────────
+router.put('/rotas/:rotaId/anexos', auth, async (req, res) => {
+  try {
+    const { nf_url, comprovante_url } = req.body;
+
+    // Busca a rota e o status do relatório pai
+    const rota = await db.get(`
+      SELECT rt.id, r.status, r.base_id
+      FROM rotas rt
+      JOIN relatorios r ON r.id = rt.relatorio_id
+      WHERE rt.id = ?
+    `, [req.params.rotaId]);
+
+    if (!rota) return res.status(404).json({ erro: 'Rota não encontrada.' });
+
+    // Verifica permissão (base dona, coordenador ou admin)
+    const coordBases = (req.session.coordenadorBases || []).map(Number);
+    const temPermissao = req.session.isAdmin
+      || coordBases.includes(Number(rota.base_id))
+      || Number(rota.base_id) === Number(req.session.userId);
+    if (!temPermissao) return res.status(403).json({ erro: 'Sem permissão.' });
+
+    // Bloqueia se relatório já finalizado
+    if (rota.status !== 'em_andamento')
+      return res.status(409).json({ erro: 'Relatório finalizado não pode ser alterado.' });
+
+    // Monta apenas os campos enviados
+    const campos = [];
+    const valores = [];
+    if (nf_url !== undefined)         { campos.push('nf_url = ?');          valores.push(nf_url || null); }
+    if (comprovante_url !== undefined) { campos.push('comprovante_url = ?'); valores.push(comprovante_url || null); }
+
+    if (campos.length === 0)
+      return res.status(400).json({ erro: 'Nenhum campo para atualizar.' });
+
+    valores.push(req.params.rotaId);
+    await db.run(`UPDATE rotas SET ${campos.join(', ')} WHERE id = ?`, valores);
+
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
 // ── Detalhe de um relatório (com rotas) ── DEVE VIR POR ÚLTIMO ───────────────
 router.get('/:id', auth, async (req, res) => {
   try {

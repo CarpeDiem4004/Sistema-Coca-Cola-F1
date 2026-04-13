@@ -896,14 +896,60 @@ async function buscarFuncionario() {
 // ── Detalhe do relatório ─────────────────────────────────────────────────────
 async function verDetalhe(id) {
   const rel = await fetch(`/api/relatorios/${id}`).then(r => r.json());
-  let html  = `<p class="fw-bold text-danger mb-2">Data: ${rel.data_referencia} — ${rel.base_nome} / ${rel.cidade || ''}</p>`;
+  const emAndamento = rel.status === 'em_andamento';
+
+  let html = `<p class="fw-bold text-danger mb-2">Data: ${rel.data_referencia} — ${rel.base_nome} / ${rel.cidade || ''}</p>`;
+  if (emAndamento) {
+    html += `<div class="alert alert-warning py-1 px-2 small mb-2">
+      <i class="bi bi-pencil-square me-1"></i>Relatório <strong>em andamento</strong> — você pode anexar ou trocar NF e comprovantes.
+    </div>`;
+  }
+
   html += `<div class="table-responsive"><table class="table table-bordered table-sm">
     <thead><tr>
       <th>Rota</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th>
       <th>Faltando</th><th>NF</th><th>Status Desc.</th><th>Vl. Desconto</th><th>Motivo</th><th>Comprovante</th>
     </tr></thead><tbody>`;
+
   for (const r of rel.rotas) {
     const info = STATUS_INFO[r.status_desconto] || { label: r.status_desconto || '—', icon: '•', cor: '#999' };
+
+    // Célula NF
+    let nfCell;
+    if (emAndamento) {
+      const verNf = r.nf_url
+        ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm py-0 me-1"><i class="bi bi-file-earmark-text me-1"></i>Ver</a>`
+        : '';
+      const labelNf = r.nf_url ? '<i class="bi bi-pencil"></i>' : '<i class="bi bi-upload me-1"></i>Anexar';
+      nfCell = `<span id="nf-cell-${r.id}">
+        ${verNf}<button class="btn btn-outline-warning btn-sm py-0" onclick="document.getElementById('file-nf-${r.id}').click()" title="${r.nf_url ? 'Trocar NF' : 'Anexar NF'}">${labelNf}</button>
+        <input type="file" id="file-nf-${r.id}" class="d-none" accept=".pdf,.jpg,.jpeg,.png,.webp"
+          onchange="uploadAnexoRota(this,'nf',${r.id},${id})">
+      </span>`;
+    } else {
+      nfCell = r.nf_url
+        ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm py-0"><i class="bi bi-file-earmark-text me-1"></i>Ver</a>`
+        : '—';
+    }
+
+    // Célula Comprovante
+    let compCell;
+    if (emAndamento) {
+      const verComp = r.comprovante_url
+        ? `<a href="${r.comprovante_url}" target="_blank" class="btn btn-outline-primary btn-sm py-0 me-1"><i class="bi bi-receipt me-1"></i>Ver</a>`
+        : '';
+      const labelComp = r.comprovante_url ? '<i class="bi bi-pencil"></i>' : '<i class="bi bi-upload me-1"></i>Anexar';
+      compCell = `<span id="comp-cell-${r.id}">
+        ${verComp}<button class="btn btn-outline-warning btn-sm py-0" onclick="document.getElementById('file-comp-${r.id}').click()" title="${r.comprovante_url ? 'Trocar comprovante' : 'Anexar comprovante'}">${labelComp}</button>
+        <input type="file" id="file-comp-${r.id}" class="d-none" accept=".pdf,.jpg,.jpeg,.png,.webp"
+          onchange="uploadAnexoRota(this,'comp',${r.id},${id})">
+      </span>`;
+    } else {
+      compCell = r.comprovante_url
+        ? `<a href="${r.comprovante_url}" target="_blank" class="btn btn-outline-primary btn-sm py-0"><i class="bi bi-receipt me-1"></i>Ver</a>`
+        : '—';
+    }
+
     html += `<tr>
       <td class="fw-bold">${r.numero_rota}</td>
       <td>${r.numero_f1 || '—'}</td>
@@ -911,16 +957,61 @@ async function verDetalhe(id) {
       <td>${r.ajudante_nome  || '—'}</td>
       <td>${r.ajudante2_nome || '—'}</td>
       <td>${r.mercadorias_faltando || '—'}</td>
-      <td>${r.nf_url ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm py-0"><i class="bi bi-file-earmark-text me-1"></i>Ver</a>` : '—'}</td>
+      <td>${nfCell}</td>
       <td><span style="color:${info.cor};font-weight:600">${info.icon} ${info.label}</span></td>
       <td class="text-danger fw-bold">${+r.valor_desconto > 0 ? fmtBRL(r.valor_desconto) : '—'}</td>
       <td>${r.motivo_desconto || '—'}</td>
-      <td>${r.comprovante_url ? `<a href="${r.comprovante_url}" target="_blank" class="btn btn-outline-primary btn-sm py-0"><i class="bi bi-receipt me-1"></i>Ver</a>` : '—'}</td>
+      <td>${compCell}</td>
     </tr>`;
   }
   html += '</tbody></table></div>';
+
   document.getElementById('corpoDetalhe').innerHTML = html;
-  new bootstrap.Modal(document.getElementById('modalDetalhe')).show();
+  // Se o modal já estiver aberto (ex: refresh após upload), só atualiza o conteúdo
+  const modalEl = document.getElementById('modalDetalhe');
+  if (!bootstrap.Modal.getInstance(modalEl)) {
+    new bootstrap.Modal(modalEl).show();
+  }
+}
+
+// ── Upload de anexo direto na tabela de detalhe ──────────────────────────────
+async function uploadAnexoRota(input, tipo, rotaId, relId) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const cellId = tipo === 'nf' ? `nf-cell-${rotaId}` : `comp-cell-${rotaId}`;
+  const cell   = document.getElementById(cellId);
+  cell.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando...';
+
+  try {
+    // 1) Faz upload para o storage
+    const fd = new FormData();
+    fd.append('nf', file);
+    const up = await fetch('/api/upload/nf', { method: 'POST', body: fd });
+    const ud = await up.json();
+    if (!up.ok) {
+      cell.innerHTML = `<span class="text-danger small">❌ ${ud.erro || 'Erro no upload'}</span>`;
+      return;
+    }
+
+    // 2) Salva a URL na rota
+    const campo = tipo === 'nf' ? { nf_url: ud.url } : { comprovante_url: ud.url };
+    const res = await fetch(`/api/relatorios/rotas/${rotaId}/anexos`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(campo)
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      cell.innerHTML = `<span class="text-danger small">❌ ${d.erro || 'Erro ao salvar'}</span>`;
+      return;
+    }
+
+    // 3) Atualiza a tabela de detalhe sem fechar o modal
+    verDetalhe(relId);
+  } catch (e) {
+    cell.innerHTML = '<span class="text-danger small">❌ Erro de conexão</span>';
+  }
 }
 
 async function logout() {
