@@ -189,6 +189,27 @@
 
 </div>
 
+<!-- Modal: visualizar anexo -->
+<div class="modal fade" id="modalAnexo" tabindex="-1" style="z-index:1060">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2" style="background:var(--cc-red)">
+        <h6 class="modal-title text-white fw-bold mb-0" id="tituloAnexo">
+          <i class="bi bi-paperclip me-2"></i>Visualizar Anexo
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0 text-center bg-dark" id="corpoAnexo" style="min-height:420px;display:flex;align-items:center;justify-content:center"></div>
+      <div class="modal-footer py-2">
+        <a id="linkAnexoAba" href="#" target="_blank" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Abrir em nova aba
+        </a>
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: detalhe -->
 <div class="modal fade" id="modalDetalhe" tabindex="-1">
   <div class="modal-dialog modal-xl">
@@ -385,6 +406,21 @@ function labelTipo(tipo) {
   return m[tipo] || tipo || '—';
 }
 
+function verAnexo(url, titulo) {
+  if (!url) return;
+  document.getElementById('tituloAnexo').innerHTML =
+    `<i class="bi bi-paperclip me-2"></i>${titulo || 'Visualizar Anexo'}`;
+  document.getElementById('linkAnexoAba').href = url;
+  const ext = url.split('?')[0].split('.').pop().toLowerCase();
+  const corpo = document.getElementById('corpoAnexo');
+  if (['jpg','jpeg','png','webp','gif'].includes(ext)) {
+    corpo.innerHTML = `<img src="${url}" style="max-width:100%;max-height:82vh;object-fit:contain;padding:8px" />`;
+  } else {
+    corpo.innerHTML = `<iframe src="${url}" style="width:100%;height:82vh;border:none"></iframe>`;
+  }
+  new bootstrap.Modal(document.getElementById('modalAnexo')).show();
+}
+
 async function verDetalhe(id) {
   const rel = await fetch(`/api/relatorios/${id}`).then(r => r.json());
   let html = `
@@ -402,7 +438,7 @@ async function verDetalhe(id) {
       ` : ''}
     </div>`;
   html += `<div class="table-responsive"><table class="table table-bordered table-sm align-middle">
-    <thead><tr><th>Nº Transp.</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th><th>Mercadorias Faltando</th><th>Status Desconto</th><th>Vl. F1</th><th>Motivo</th></tr></thead><tbody>`;
+    <thead><tr><th>Nº Transp.</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th><th>Mercadorias Faltando</th><th>NF</th><th>Status Desconto</th><th>Vl. F1</th><th>Motivo</th></tr></thead><tbody>`;
   for (const r of rel.rotas) {
     const inf = STATUS_INFO[r.status_desconto] || { label: r.status_desconto||'—', cor:'#999' };
     html += `<tr>
@@ -412,6 +448,9 @@ async function verDetalhe(id) {
       <td>${r.ajudante_nome||'—'}</td>
       <td>${r.ajudante2_nome||'—'}</td>
       <td>${r.mercadorias_faltando||'—'}</td>
+      <td>${r.nf_url
+        ? `<button onclick="verAnexo('${r.nf_url}','Nota Fiscal – Rota ${r.numero_rota}')" class="btn btn-outline-secondary btn-sm py-0"><i class="bi bi-paperclip me-1"></i>Ver NF</button>`
+        : '—'}</td>
       <td><span style="color:${inf.cor};font-weight:600">${inf.label}</span></td>
       <td class="text-danger fw-bold">${Number(r.valor_desconto||0) > 0 ? fmtBRL(r.valor_desconto) : '—'}</td>
       <td>${r.motivo_desconto||'—'}</td>
