@@ -384,6 +384,38 @@ router.put('/alertas/:id/lido', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
+// ── Atualizar situação individual de uma rota ─────────────────────────────────
+router.put('/rotas/:rotaId/situacao', auth, async (req, res) => {
+  try {
+    const { situacao } = req.body;
+    if (!['em_andamento', 'finalizado'].includes(situacao))
+      return res.status(400).json({ erro: 'Situação inválida. Use em_andamento ou finalizado.' });
+
+    const rota = await db.get(`
+      SELECT rt.id, r.status, r.base_id
+      FROM rotas rt
+      JOIN relatorios r ON r.id = rt.relatorio_id
+      WHERE rt.id = ?
+    `, [req.params.rotaId]);
+
+    if (!rota) return res.status(404).json({ erro: 'Rota não encontrada.' });
+
+    // Permissão: base dona, coordenador ou admin
+    const coordBases = (req.session.coordenadorBases || []).map(Number);
+    const temPermissao = req.session.isAdmin
+      || coordBases.includes(Number(rota.base_id))
+      || Number(rota.base_id) === Number(req.session.userId);
+    if (!temPermissao) return res.status(403).json({ erro: 'Sem permissão.' });
+
+    // Só bloqueia alteração se o relatório pai estiver finalizado
+    if (rota.status === 'finalizado')
+      return res.status(409).json({ erro: 'Relatório finalizado — situação dos lançamentos não pode ser alterada.' });
+
+    await db.run(`UPDATE rotas SET situacao = ? WHERE id = ?`, [situacao, req.params.rotaId]);
+    res.json({ ok: true, situacao });
+  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
 // ── Editar anexos de uma rota (só relatórios em_andamento) ───────────────────
 router.put('/rotas/:rotaId/anexos', auth, async (req, res) => {
   try {

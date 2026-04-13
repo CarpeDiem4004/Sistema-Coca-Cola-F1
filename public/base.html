@@ -919,16 +919,41 @@ async function verDetalhe(id) {
 
   html += `<div class="table-responsive"><table class="table table-bordered table-sm">
     <thead><tr>
-      <th>Rota</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th>
+      <th>Situação</th><th>Rota</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th>
       <th>Faltando</th><th>NF</th><th>Status Desc.</th><th>Vl. Desconto</th><th>Motivo</th><th>Comprovante</th>
     </tr></thead><tbody>`;
 
   for (const r of (rel.rotas || [])) {
     const info = STATUS_INFO[r.status_desconto] || { label: r.status_desconto || '—', icon: '•', cor: '#999' };
+    const rotaFinalizada = r.situacao === 'finalizado';
+
+    // Célula Situação (status individual da rota)
+    let situacaoCell;
+    if (emAndamento) {
+      if (rotaFinalizada) {
+        situacaoCell = `<span id="sit-cell-${r.id}">
+          <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>
+          <button class="btn btn-outline-success btn-sm py-0 ms-1" onclick="alterarSituacaoRota(${r.id},'em_andamento',${id})" title="Reabrir lançamento">
+            <i class="bi bi-arrow-counterclockwise"></i>
+          </button>
+        </span>`;
+      } else {
+        situacaoCell = `<span id="sit-cell-${r.id}">
+          <span class="badge bg-success"><i class="bi bi-pencil me-1"></i>Em andamento</span>
+          <button class="btn btn-outline-secondary btn-sm py-0 ms-1" onclick="alterarSituacaoRota(${r.id},'finalizado',${id})" title="Finalizar este lançamento">
+            <i class="bi bi-lock"></i>
+          </button>
+        </span>`;
+      }
+    } else {
+      situacaoCell = rotaFinalizada
+        ? `<span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>`
+        : `<span class="badge bg-success"><i class="bi bi-pencil me-1"></i>Em andamento</span>`;
+    }
 
     // Célula NF
     let nfCell;
-    if (emAndamento) {
+    if (emAndamento && !rotaFinalizada) {
       const verNf = r.nf_url
         ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm py-0 me-1"><i class="bi bi-file-earmark-text me-1"></i>Ver</a>`
         : '';
@@ -946,7 +971,7 @@ async function verDetalhe(id) {
 
     // Célula Comprovante
     let compCell;
-    if (emAndamento) {
+    if (emAndamento && !rotaFinalizada) {
       const verComp = r.comprovante_url
         ? `<a href="${r.comprovante_url}" target="_blank" class="btn btn-outline-primary btn-sm py-0 me-1"><i class="bi bi-receipt me-1"></i>Ver</a>`
         : '';
@@ -962,7 +987,8 @@ async function verDetalhe(id) {
         : '—';
     }
 
-    html += `<tr>
+    html += `<tr class="${rotaFinalizada ? 'table-light text-muted' : ''}">
+      <td>${situacaoCell}</td>
       <td class="fw-bold">${r.numero_rota}</td>
       <td>${r.numero_f1 || '—'}</td>
       <td>${r.motorista_nome || '—'}</td>
@@ -983,6 +1009,33 @@ async function verDetalhe(id) {
   const modalEl = document.getElementById('modalDetalhe');
   if (!bootstrap.Modal.getInstance(modalEl)) {
     new bootstrap.Modal(modalEl).show();
+  }
+}
+
+// ── Alterar situação individual de um lançamento ─────────────────────────────
+async function alterarSituacaoRota(rotaId, novaSituacao, relId) {
+  const acao = novaSituacao === 'finalizado' ? 'finalizar' : 'reabrir';
+  if (!confirm(`Deseja ${acao} este lançamento?`)) return;
+
+  const cell = document.getElementById(`sit-cell-${rotaId}`);
+  if (cell) cell.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+  try {
+    const res = await fetch(`/api/relatorios/rotas/${rotaId}/situacao`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ situacao: novaSituacao })
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      alert(d.erro || 'Erro ao alterar situação.');
+      verDetalhe(relId); // recarrega
+      return;
+    }
+    verDetalhe(relId); // recarrega o modal com os dados atualizados
+  } catch (e) {
+    alert('Erro de conexão ao alterar situação.');
+    verDetalhe(relId);
   }
 }
 

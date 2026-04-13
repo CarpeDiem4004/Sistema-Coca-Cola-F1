@@ -25,6 +25,8 @@ async function runMigrations() {
     `ALTER TABLE rotas ADD COLUMN IF NOT EXISTS nf_url           TEXT`,
     `ALTER TABLE rotas ADD COLUMN IF NOT EXISTS status_desconto  TEXT DEFAULT 'nenhum'`,
     `ALTER TABLE rotas ADD COLUMN IF NOT EXISTS comprovante_url  TEXT`,
+    `ALTER TABLE rotas ADD COLUMN IF NOT EXISTS situacao         TEXT DEFAULT 'em_andamento'`,
+    `UPDATE rotas SET situacao = 'em_andamento' WHERE situacao IS NULL`,
 
     // ── Tabela: gerentes ────────────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS gerentes (
