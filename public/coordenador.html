@@ -427,15 +427,29 @@ async function verDetalhe(id) {
     <div class="mb-2"><h6 class="fw-bold text-danger mb-0">${rel.base_nome} — ${rel.cidade||''}</h6>
       <small class="text-muted">Ref: ${rel.data_referencia} | Postado: ${new Date(rel.postado_em).toLocaleString('pt-BR')}</small>
     </div>
-    <div class="alert alert-light border py-2 px-3 mb-3 small">
-      <i class="bi bi-person-check-fill text-muted me-1"></i>
-      <strong>Criado por:</strong> ${rel.criado_por_nome||'—'}
-      <span class="badge bg-secondary ms-1">${labelTipo(rel.criado_por_tipo)}</span>
+    <div class="border rounded mb-3" style="background:#fafafa;overflow:hidden">
+      <div class="px-3 py-2 d-flex align-items-center gap-2" style="border-bottom:1px solid #eee">
+        <i class="bi bi-send-fill text-success"></i>
+        <div class="flex-grow-1">
+          <span class="text-muted small">Lançado por</span><br>
+          <strong>${rel.criado_por_nome||'—'}</strong>
+          <span class="badge bg-secondary ms-1" style="font-size:.7rem">${labelTipo(rel.criado_por_tipo)}</span>
+        </div>
+        <small class="text-muted">${new Date(rel.postado_em).toLocaleString('pt-BR')}</small>
+      </div>
       ${rel.finalizado_por_nome ? `
-        &nbsp;|&nbsp; <i class="bi bi-lock-fill text-muted me-1"></i>
-        <strong>Finalizado por:</strong> ${rel.finalizado_por_nome}
-        <span class="badge bg-dark ms-1">${labelTipo(rel.finalizado_por_tipo)}</span>
-      ` : ''}
+      <div class="px-3 py-2 d-flex align-items-center gap-2">
+        <i class="bi bi-lock-fill text-dark"></i>
+        <div class="flex-grow-1">
+          <span class="text-muted small">Alterado / Finalizado por</span><br>
+          <strong>${rel.finalizado_por_nome}</strong>
+          <span class="badge bg-dark ms-1" style="font-size:.7rem">${labelTipo(rel.finalizado_por_tipo)}</span>
+        </div>
+        <small class="text-muted">${rel.finalizado_em ? new Date(rel.finalizado_em).toLocaleString('pt-BR') : '—'}</small>
+      </div>` : `
+      <div class="px-3 py-2 text-muted small d-flex align-items-center gap-2">
+        <i class="bi bi-hourglass-split"></i> Nenhuma alteração registrada
+      </div>`}
     </div>`;
   html += `<div class="table-responsive"><table class="table table-bordered table-sm align-middle">
     <thead><tr><th>Nº Transp.</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th><th>Mercadorias Faltando</th><th>NF</th><th>Status Desconto</th><th>Vl. F1</th><th>Motivo</th></tr></thead><tbody>`;
