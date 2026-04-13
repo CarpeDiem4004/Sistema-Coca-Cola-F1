@@ -406,8 +406,8 @@ router.put('/rotas/:rotaId/anexos', auth, async (req, res) => {
       || Number(rota.base_id) === Number(req.session.userId);
     if (!temPermissao) return res.status(403).json({ erro: 'Sem permissão.' });
 
-    // Bloqueia se relatório já finalizado
-    if (rota.status !== 'em_andamento')
+    // Bloqueia APENAS se explicitamente finalizado (NULL = em andamento)
+    if (rota.status === 'finalizado')
       return res.status(409).json({ erro: 'Relatório finalizado não pode ser alterado.' });
 
     // Monta apenas os campos enviados

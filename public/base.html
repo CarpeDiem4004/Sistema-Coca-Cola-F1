@@ -895,10 +895,22 @@ async function buscarFuncionario() {
 
 // ── Detalhe do relatório ─────────────────────────────────────────────────────
 async function verDetalhe(id) {
-  const rel = await fetch(`/api/relatorios/${id}`).then(r => r.json());
-  const emAndamento = !rel.status || rel.status === 'em_andamento';
+  let rel;
+  try {
+    rel = await fetch(`/api/relatorios/${id}`).then(r => r.json());
+    if (rel.erro) { alert('Erro ao carregar relatório: ' + rel.erro); return; }
+  } catch (e) {
+    alert('Erro de conexão ao carregar relatório.'); return;
+  }
 
-  let html = `<p class="fw-bold text-danger mb-2">Data: ${rel.data_referencia} — ${rel.base_nome} / ${rel.cidade || ''}</p>`;
+  // Só bloqueia edição se for EXPLICITAMENTE finalizado
+  const emAndamento = rel.status !== 'finalizado';
+
+  const statusBadge = emAndamento
+    ? `<span class="badge bg-success ms-2"><i class="bi bi-pencil me-1"></i>Em andamento</span>`
+    : `<span class="badge bg-secondary ms-2"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>`;
+
+  let html = `<p class="fw-bold text-danger mb-2">Data: ${rel.data_referencia} — ${rel.base_nome} / ${rel.cidade || ''} ${statusBadge}</p>`;
   if (emAndamento) {
     html += `<div class="alert alert-warning py-1 px-2 small mb-2">
       <i class="bi bi-pencil-square me-1"></i>Relatório <strong>em andamento</strong> — você pode anexar ou trocar NF e comprovantes.
@@ -911,7 +923,7 @@ async function verDetalhe(id) {
       <th>Faltando</th><th>NF</th><th>Status Desc.</th><th>Vl. Desconto</th><th>Motivo</th><th>Comprovante</th>
     </tr></thead><tbody>`;
 
-  for (const r of rel.rotas) {
+  for (const r of (rel.rotas || [])) {
     const info = STATUS_INFO[r.status_desconto] || { label: r.status_desconto || '—', icon: '•', cor: '#999' };
 
     // Célula NF
