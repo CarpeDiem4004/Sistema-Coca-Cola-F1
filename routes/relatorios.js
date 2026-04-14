@@ -187,20 +187,24 @@ router.get('/stats/base', auth, async (req, res) => {
       WHERE r.base_id = $1
     `, [baseId]);
 
-    // Últimos 6 meses
+    // Últimos 6 meses (data_referencia é TEXT 'YYYY-MM-DD', usa SUBSTRING e comparação textual)
+    const seisAtras = new Date();
+    seisAtras.setMonth(seisAtras.getMonth() - 6);
+    const seisAtrasStr = seisAtras.toISOString().slice(0, 10);
+
     const porMes = await db.pool.query(`
       SELECT
-        TO_CHAR(r.data_referencia, 'YYYY-MM') AS mes,
+        SUBSTRING(r.data_referencia, 1, 7)   AS mes,
         COUNT(DISTINCT r.id)                  AS relatorios,
         COUNT(rt.id)                          AS rotas,
         COALESCE(SUM(rt.valor_desconto) FILTER (WHERE rt.status_desconto NOT IN ('nenhum','abonar')), 0) AS valor_desconto
       FROM relatorios r
       LEFT JOIN rotas rt ON rt.relatorio_id = r.id
       WHERE r.base_id = $1
-        AND r.data_referencia >= CURRENT_DATE - INTERVAL '6 months'
+        AND r.data_referencia >= $2
       GROUP BY mes
       ORDER BY mes DESC
-    `, [baseId]);
+    `, [baseId, seisAtrasStr]);
 
     // Ranking motoristas (top 10 por rotas)
     const rankMotoristas = await db.pool.query(`

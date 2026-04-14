@@ -311,6 +311,7 @@ let rotaIdx = 0;
 
   await carregarFuncionarios();
   await carregarHistorico();
+  carregarStats(); // carrega stats em paralelo (sem await para não bloquear)
   addRota();
   await verificarData();
 })();
@@ -798,8 +799,16 @@ const STATUS_INFO = {
 
 async function carregarStats() {
   try {
-    const data = await fetch('/api/relatorios/stats/base').then(r => r.json());
-    if (data.erro) { console.warn('stats:', data.erro); return; }
+    const resp = await fetch('/api/relatorios/stats/base');
+    const data = await resp.json();
+    if (!resp.ok || data.erro) {
+      console.error('stats erro:', data.erro || resp.status);
+      ['tabelaMeses','statusDescontoBloco','rankMotoristas','rankAjudantes'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<p class="text-danger small">Erro ao carregar dados.</p>';
+      });
+      return;
+    }
 
     // Cards
     document.getElementById('stRelatorios').textContent = data.totais.total_relatorios;
@@ -872,7 +881,13 @@ async function carregarStats() {
           </tbody>
         </table>`;
 
-  } catch (err) { console.error('carregarStats:', err); }
+  } catch (err) {
+    console.error('carregarStats:', err);
+    ['tabelaMeses','statusDescontoBloco','rankMotoristas','rankAjudantes'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '<p class="text-danger small">Erro de conexão.</p>';
+    });
+  }
 }
 
 // ── Busca funcionário ────────────────────────────────────────────────────────
