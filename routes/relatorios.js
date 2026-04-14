@@ -416,6 +416,49 @@ router.put('/rotas/:rotaId/situacao', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
+// ── Editar desconto de uma rota ───────────────────────────────────────────────
+router.put('/rotas/:rotaId/desconto', auth, async (req, res) => {
+  try {
+    const { status_desconto, valor_desconto, motivo_desconto, desconto_equipe } = req.body;
+    const statusValidos = ['nenhum','motorista','equipe','abonar','regularizado','pago'];
+    if (status_desconto && !statusValidos.includes(status_desconto))
+      return res.status(400).json({ erro: 'Status de desconto inválido.' });
+
+    const rota = await db.get(`
+      SELECT rt.id, r.status, r.base_id
+      FROM rotas rt JOIN relatorios r ON r.id = rt.relatorio_id
+      WHERE rt.id = ?
+    `, [req.params.rotaId]);
+
+    if (!rota) return res.status(404).json({ erro: 'Rota não encontrada.' });
+
+    const coordBases = (req.session.coordenadorBases || []).map(Number);
+    const temPermissao = req.session.isAdmin
+      || coordBases.includes(Number(rota.base_id))
+      || Number(rota.base_id) === Number(req.session.userId);
+    if (!temPermissao) return res.status(403).json({ erro: 'Sem permissão.' });
+    if (rota.status === 'finalizado')
+      return res.status(409).json({ erro: 'Relatório finalizado não pode ser alterado.' });
+
+    await db.run(`
+      UPDATE rotas SET
+        status_desconto = ?,
+        valor_desconto  = ?,
+        motivo_desconto = ?,
+        desconto_equipe = ?
+      WHERE id = ?
+    `, [
+      status_desconto || 'nenhum',
+      valor_desconto  || 0,
+      motivo_desconto || null,
+      ['motorista','equipe'].includes(status_desconto) ? 1 : 0,
+      req.params.rotaId
+    ]);
+
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
 // ── Editar anexos de uma rota (só relatórios em_andamento) ───────────────────
 router.put('/rotas/:rotaId/anexos', auth, async (req, res) => {
   try {

@@ -241,6 +241,45 @@
 </div>
 
 <!-- Modal: detalhe relatório -->
+<!-- Modal: editar desconto da rota -->
+<div class="modal fade" id="modalEditarDesconto" tabindex="-1" style="z-index:1065">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cc-red)">
+        <h6 class="modal-title text-white fw-bold"><i class="bi bi-pencil-square me-2"></i>Editar Status do Desconto</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editDescRotaId" />
+        <input type="hidden" id="editDescRelId" />
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Status do Desconto</label>
+          <select class="form-select" id="editDescStatus">
+            <option value="nenhum">— Sem desconto —</option>
+            <option value="motorista">🚛 Descontar do Motorista</option>
+            <option value="equipe">👥 Descontar da Equipe (dividir)</option>
+            <option value="abonar">✅ Abonar</option>
+            <option value="regularizado">🔄 Regularizado</option>
+            <option value="pago">💳 Pago</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Valor (R$)</label>
+          <input type="text" class="form-control" id="editDescValor" placeholder="R$ 0,00" oninput="mascaraMoeda(this)" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Motivo / Justificativa</label>
+          <input type="text" class="form-control" id="editDescMotivo" placeholder="Descreva o motivo" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-danger" onclick="salvarDesconto()"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="modalDetalhe" tabindex="-1">
   <div class="modal-dialog modal-xl">
     <div class="modal-content">
@@ -988,7 +1027,15 @@ async function verDetalhe(id) {
       <td>${r.ajudante2_nome || '—'}</td>
       <td>${r.mercadorias_faltando || '—'}</td>
       <td>${nfCell}</td>
-      <td><span style="color:${info.cor};font-weight:600">${info.icon} ${info.label}</span></td>
+      <td id="desc-cell-${r.id}">
+        ${emAndamento && !rotaFinalizada
+          ? `<button class="btn btn-sm btn-outline-secondary py-0" onclick="abrirEditarDesconto(${r.id},${id})">
+               <span style="color:${info.cor};font-weight:600">${info.icon} ${info.label}</span>
+               <i class="bi bi-pencil ms-1 small"></i>
+             </button>`
+          : `<span style="color:${info.cor};font-weight:600">${info.icon} ${info.label}</span>`
+        }
+      </td>
       <td class="text-danger fw-bold">${+r.valor_desconto > 0 ? fmtBRL(r.valor_desconto) : '—'}</td>
       <td>${r.motivo_desconto || '—'}</td>
       <td>${compCell}</td>
@@ -1001,6 +1048,52 @@ async function verDetalhe(id) {
   const modalEl = document.getElementById('modalDetalhe');
   if (!bootstrap.Modal.getInstance(modalEl)) {
     new bootstrap.Modal(modalEl).show();
+  }
+}
+
+// ── Editar Status do Desconto de um lançamento ───────────────────────────────
+function abrirEditarDesconto(rotaId, relId) {
+  document.getElementById('editDescRotaId').value = rotaId;
+  document.getElementById('editDescRelId').value  = relId;
+
+  // Lê valores atuais da linha
+  const cell = document.getElementById(`desc-cell-${rotaId}`);
+  const btn  = cell?.querySelector('button');
+  // Tenta pegar o select de status já renderizado (não tem, pega da célula de valor/motivo)
+  // Deixa em branco para o usuário preencher com o novo valor
+  document.getElementById('editDescStatus').value = '';
+  document.getElementById('editDescValor').value  = '';
+  document.getElementById('editDescMotivo').value = '';
+
+  new bootstrap.Modal(document.getElementById('modalEditarDesconto')).show();
+}
+
+async function salvarDesconto() {
+  const rotaId = document.getElementById('editDescRotaId').value;
+  const relId  = document.getElementById('editDescRelId').value;
+  const status = document.getElementById('editDescStatus').value;
+  const valor  = parseMoeda(document.getElementById('editDescValor').value);
+  const motivo = document.getElementById('editDescMotivo').value.trim();
+
+  const precisaMotivo = ['motorista','equipe','abonar','regularizado','pago'].includes(status);
+  if (precisaMotivo && !motivo) {
+    alert('Preencha o motivo / justificativa.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/relatorios/rotas/${rotaId}/desconto`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status_desconto: status, valor_desconto: valor, motivo_desconto: motivo })
+    });
+    const d = await res.json();
+    if (!res.ok) { alert(d.erro || 'Erro ao salvar.'); return; }
+
+    bootstrap.Modal.getInstance(document.getElementById('modalEditarDesconto')).hide();
+    verDetalhe(relId); // recarrega modal
+  } catch (e) {
+    alert('Erro de conexão ao salvar.');
   }
 }
 
