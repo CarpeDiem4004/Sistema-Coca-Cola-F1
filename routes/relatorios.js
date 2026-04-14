@@ -175,29 +175,33 @@ router.get('/stats/base', auth, async (req, res) => {
     const baseId = req.session.isAdmin ? (req.query.base_id || null) : req.session.userId;
     if (!baseId) return res.status(400).json({ erro: 'base_id obrigatório para admin.' });
 
-    // Totais gerais
+    const bid = [baseId];
+
+    // Totais gerais — CASE WHEN no lugar de FILTER para maior compatibilidade
     const totais = await db.pool.query(`
       SELECT
-        COUNT(DISTINCT r.id)                          AS total_relatorios,
-        COUNT(rt.id)                                  AS total_rotas,
-        COUNT(rt.id) FILTER (WHERE rt.status_desconto NOT IN ('nenhum','abonar')) AS total_descontos,
-        COALESCE(SUM(rt.valor_desconto) FILTER (WHERE rt.status_desconto NOT IN ('nenhum','abonar')), 0) AS total_valor_desconto
+        COUNT(DISTINCT r.id)   AS total_relatorios,
+        COUNT(rt.id)           AS total_rotas,
+        COUNT(CASE WHEN rt.status_desconto NOT IN ('nenhum','abonar') THEN 1 END) AS total_descontos,
+        COALESCE(SUM(CASE WHEN rt.status_desconto NOT IN ('nenhum','abonar')
+                          THEN rt.valor_desconto::numeric ELSE 0 END), 0) AS total_valor_desconto
       FROM relatorios r
       LEFT JOIN rotas rt ON rt.relatorio_id = r.id
       WHERE r.base_id = $1
-    `, [baseId]);
+    `, bid);
 
-    // Últimos 6 meses (data_referencia é TEXT 'YYYY-MM-DD', usa SUBSTRING e comparação textual)
+    // Últimos 6 meses — SUBSTRING pois data_referencia é TEXT
     const seisAtras = new Date();
     seisAtras.setMonth(seisAtras.getMonth() - 6);
     const seisAtrasStr = seisAtras.toISOString().slice(0, 10);
 
     const porMes = await db.pool.query(`
       SELECT
-        SUBSTRING(r.data_referencia, 1, 7)   AS mes,
-        COUNT(DISTINCT r.id)                  AS relatorios,
-        COUNT(rt.id)                          AS rotas,
-        COALESCE(SUM(rt.valor_desconto) FILTER (WHERE rt.status_desconto NOT IN ('nenhum','abonar')), 0) AS valor_desconto
+        SUBSTRING(r.data_referencia, 1, 7) AS mes,
+        COUNT(DISTINCT r.id)               AS relatorios,
+        COUNT(rt.id)                       AS rotas,
+        COALESCE(SUM(CASE WHEN rt.status_desconto NOT IN ('nenhum','abonar')
+                          THEN rt.valor_desconto::numeric ELSE 0 END), 0) AS valor_desconto
       FROM relatorios r
       LEFT JOIN rotas rt ON rt.relatorio_id = r.id
       WHERE r.base_id = $1
@@ -206,14 +210,12 @@ router.get('/stats/base', auth, async (req, res) => {
       ORDER BY mes DESC
     `, [baseId, seisAtrasStr]);
 
-    // Ranking motoristas (top 10 por rotas)
+    // Ranking motoristas
     const rankMotoristas = await db.pool.query(`
-      SELECT
-        f.id,
-        f.nome,
-        f.cpf,
-        COUNT(rt.id)                          AS total_rotas,
-        COALESCE(SUM(rt.valor_desconto) FILTER (WHERE rt.status_desconto = 'motorista'), 0) AS total_desconto
+      SELECT f.id, f.nome, f.cpf,
+        COUNT(rt.id) AS total_rotas,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'motorista'
+                          THEN rt.valor_desconto::numeric ELSE 0 END), 0) AS total_desconto
       FROM rotas rt
       JOIN relatorios r ON r.id = rt.relatorio_id
       JOIN funcionarios f ON f.id = rt.motorista_id
@@ -221,48 +223,43 @@ router.get('/stats/base', auth, async (req, res) => {
       GROUP BY f.id, f.nome, f.cpf
       ORDER BY total_rotas DESC
       LIMIT 10
-    `, [baseId]);
+    `, bid);
 
-    // Ranking ajudantes (top 10 por rotas)
+    // Ranking ajudantes — consulta separada para cada campo para evitar erro com ajudante2_id
     const rankAjudantes = await db.pool.query(`
-      SELECT
-        f.id,
-        f.nome,
-        f.cpf,
-        COUNT(rt.id) AS total_rotas
-      FROM (
-        SELECT ajudante_id AS fid, relatorio_id FROM rotas WHERE ajudante_id IS NOT NULL
-        UNION ALL
-        SELECT ajudante2_id AS fid, relatorio_id FROM rotas WHERE ajudante2_id IS NOT NULL
-      ) aj
-      JOIN relatorios r ON r.id = aj.relatorio_id
-      JOIN funcionarios f ON f.id = aj.fid
-      WHERE r.base_id = $1
+      SELECT f.id, f.nome, f.cpf, COUNT(*) AS total_rotas
+      FROM rotas rt
+      JOIN relatorios r ON r.id = rt.relatorio_id
+      JOIN funcionarios f ON f.id = rt.ajudante_id
+      WHERE r.base_id = $1 AND rt.ajudante_id IS NOT NULL
       GROUP BY f.id, f.nome, f.cpf
       ORDER BY total_rotas DESC
       LIMIT 10
-    `, [baseId]);
+    `, bid);
 
-    // Breakdown por status de desconto
+    // Status de descontos
     const statusDescontos = await db.pool.query(`
       SELECT
         rt.status_desconto,
-        COUNT(*)                            AS quantidade,
-        COALESCE(SUM(rt.valor_desconto), 0) AS valor_total
+        COUNT(*)                                     AS quantidade,
+        COALESCE(SUM(rt.valor_desconto::numeric), 0) AS valor_total
       FROM rotas rt
       JOIN relatorios r ON r.id = rt.relatorio_id
       WHERE r.base_id = $1
       GROUP BY rt.status_desconto
-    `, [baseId]);
+    `, bid);
 
     res.json({
-      totais:         totais.rows[0],
-      porMes:         porMes.rows,
-      rankMotoristas: rankMotoristas.rows,
-      rankAjudantes:  rankAjudantes.rows,
+      totais:          totais.rows[0],
+      porMes:          porMes.rows,
+      rankMotoristas:  rankMotoristas.rows,
+      rankAjudantes:   rankAjudantes.rows,
       statusDescontos: statusDescontos.rows
     });
-  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
+  } catch (err) {
+    console.error('[stats/base]', err.message);
+    res.status(500).json({ erro: 'Erro interno.', detalhe: err.message });
+  }
 });
 
 // ── Busca funcionário por nome ou CPF ─────────────────────────────────────────

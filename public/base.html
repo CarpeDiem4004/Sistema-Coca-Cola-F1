@@ -802,10 +802,11 @@ async function carregarStats() {
     const resp = await fetch('/api/relatorios/stats/base');
     const data = await resp.json();
     if (!resp.ok || data.erro) {
-      console.error('stats erro:', data.erro || resp.status);
+      const msg = data.detalhe || data.erro || `HTTP ${resp.status}`;
+      console.error('stats erro:', msg);
       ['tabelaMeses','statusDescontoBloco','rankMotoristas','rankAjudantes'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.innerHTML = '<p class="text-danger small">Erro ao carregar dados.</p>';
+        if (el) el.innerHTML = `<p class="text-danger small">Erro: ${msg}</p>`;
       });
       return;
     }
