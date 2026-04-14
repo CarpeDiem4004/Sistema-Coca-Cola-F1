@@ -363,6 +363,88 @@ router.put('/:id/status', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
+// ── Painel Executivo ──────────────────────────────────────────────────────────
+router.get('/stats/executivo', auth, async (req, res) => {
+  if (!req.session.isAdmin && !req.session.isCoordinador)
+    return res.status(403).json({ erro: 'Sem permissão.' });
+  try {
+    const { base_id, data_de, data_ate } = req.query;
+    const params = [];
+    let where = 'WHERE 1=1';
+
+    if (req.session.isCoordinador) {
+      const bases = req.session.coordenadorBases || [];
+      if (bases.length === 0) return res.json({ resumo: {}, porBase: [], porDesconto: [], tempoMedio: null });
+      params.push(bases);
+      where += ` AND r.base_id = ANY($${params.length}::int[])`;
+    }
+    if (base_id) { params.push(base_id); where += ` AND r.base_id = $${params.length}`; }
+    if (data_de) { params.push(data_de); where += ` AND r.data_referencia >= $${params.length}`; }
+    if (data_ate) { params.push(data_ate); where += ` AND r.data_referencia <= $${params.length}`; }
+
+    // ── Resumo geral
+    const resumoQ = await db.pool.query(`
+      SELECT
+        COUNT(DISTINCT r.id)                                                         AS total_relatorios,
+        COUNT(DISTINCT CASE WHEN r.status = 'finalizado'   THEN r.id END)           AS finalizados,
+        COUNT(DISTINCT CASE WHEN r.status != 'finalizado'  THEN r.id END)           AS em_andamento,
+        COUNT(rt.id)                                                                 AS total_rotas,
+        COALESCE(SUM(rt.valor_desconto::numeric), 0)                                AS total_valor,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'motorista'   THEN rt.valor_desconto::numeric END), 0) AS valor_motorista,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'equipe'      THEN rt.valor_desconto::numeric END), 0) AS valor_equipe,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'pago'        THEN rt.valor_desconto::numeric END), 0) AS valor_pago,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'regularizado' THEN rt.valor_desconto::numeric END), 0) AS valor_regularizado,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'abonar'      THEN rt.valor_desconto::numeric END), 0) AS valor_abonar,
+        COUNT(CASE WHEN rt.status_desconto NOT IN ('nenhum','abonar') THEN 1 END)   AS total_ocorrencias
+      FROM relatorios r
+      LEFT JOIN rotas rt ON rt.relatorio_id = r.id
+      ${where}
+    `, params);
+
+    // ── Por base
+    const porBaseQ = await db.pool.query(`
+      SELECT
+        b.nome AS base_nome, b.cidade,
+        COUNT(DISTINCT r.id)                                                              AS total_relatorios,
+        COUNT(DISTINCT CASE WHEN r.status = 'finalizado'  THEN r.id END)                AS finalizados,
+        COUNT(DISTINCT CASE WHEN r.status != 'finalizado' THEN r.id END)                AS em_andamento,
+        COUNT(rt.id)                                                                     AS total_rotas,
+        COUNT(CASE WHEN rt.status_desconto NOT IN ('nenhum','abonar') THEN 1 END)       AS ocorrencias,
+        COALESCE(SUM(rt.valor_desconto::numeric), 0)                                     AS total_valor,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'motorista' THEN rt.valor_desconto::numeric END), 0) AS val_motorista,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'equipe'    THEN rt.valor_desconto::numeric END), 0) AS val_equipe,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'pago'      THEN rt.valor_desconto::numeric END), 0) AS val_pago,
+        ROUND(AVG(CASE WHEN r.status = 'finalizado' AND r.finalizado_em IS NOT NULL
+          THEN EXTRACT(EPOCH FROM (r.finalizado_em - r.postado_em))/3600 END)::numeric, 1) AS tempo_medio_horas
+      FROM relatorios r
+      JOIN bases b ON b.id = r.base_id
+      LEFT JOIN rotas rt ON rt.relatorio_id = r.id
+      ${where}
+      GROUP BY b.id, b.nome, b.cidade
+      ORDER BY total_valor DESC
+    `, params);
+
+    // ── Por tipo de desconto
+    const porDescontoQ = await db.pool.query(`
+      SELECT
+        rt.status_desconto,
+        COUNT(rt.id)                                AS quantidade,
+        COALESCE(SUM(rt.valor_desconto::numeric), 0) AS valor_total
+      FROM rotas rt
+      JOIN relatorios r ON r.id = rt.relatorio_id
+      ${where}
+      GROUP BY rt.status_desconto
+      ORDER BY valor_total DESC
+    `, params);
+
+    res.json({
+      resumo:      resumoQ.rows[0],
+      porBase:     porBaseQ.rows,
+      porDesconto: porDescontoQ.rows
+    });
+  } catch (err) { console.error('[stats/executivo]', err.message); res.status(500).json({ erro: err.message }); }
+});
+
 // ── Alertas ───────────────────────────────────────────────────────────────────
 router.get('/alertas/pendentes', auth, async (req, res) => {
   if (!req.session.isAdmin) return res.status(403).json({ erro: 'Sem permissão.' });

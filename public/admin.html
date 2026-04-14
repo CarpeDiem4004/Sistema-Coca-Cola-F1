@@ -218,6 +218,52 @@
     <!-- Resumo rápido -->
     <div class="d-flex gap-3 mb-3 flex-wrap" id="resumoRelatorios"></div>
 
+    <!-- ── PAINEL EXECUTIVO ── -->
+    <div id="painelExecutivo" class="mb-4">
+      <!-- Cards topo -->
+      <div class="row g-2 mb-3" id="execCards">
+        <div class="col-6 col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body py-2 px-3"><div class="text-muted small">📋 Relatórios</div><div class="fs-4 fw-bold" id="ex-total-rel">—</div><div class="d-flex gap-2 mt-1"><span class="badge bg-success" id="ex-finalizados">0 finalizados</span><span class="badge bg-warning text-dark" id="ex-andamento">0 em andamento</span></div></div></div></div>
+        <div class="col-6 col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body py-2 px-3"><div class="text-muted small">🚛 Rotas / Ocorrências</div><div class="fs-4 fw-bold" id="ex-total-rotas">—</div><div class="text-danger small" id="ex-ocorrencias"></div></div></div></div>
+        <div class="col-6 col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body py-2 px-3"><div class="text-muted small">💰 Total F1 (descontos)</div><div class="fs-4 fw-bold text-danger" id="ex-total-valor">—</div><div class="text-muted small" id="ex-valor-sub"></div></div></div></div>
+        <div class="col-6 col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body py-2 px-3"><div class="text-muted small">⏱️ Tempo Médio Resolução</div><div class="fs-4 fw-bold" id="ex-tempo">—</div><div class="text-muted small">horas (relatórios finalizados)</div></div></div></div>
+      </div>
+
+      <!-- Breakdown descontos -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-5">
+          <div class="card border-0 shadow-sm">
+            <div class="card-header py-2 fw-semibold small bg-light">📊 Breakdown por Tipo de Desconto</div>
+            <div class="card-body p-0" id="execDescontos"><div class="p-3 text-muted small">Carregando...</div></div>
+          </div>
+        </div>
+        <div class="col-md-7">
+          <div class="card border-0 shadow-sm">
+            <div class="card-header py-2 fw-semibold small bg-light">🏭 Visão por Base</div>
+            <div class="card-body p-0">
+              <div class="table-responsive" style="max-height:260px;overflow-y:auto">
+                <table class="table table-sm table-hover mb-0" id="execPorBase">
+                  <thead class="table-light sticky-top"><tr>
+                    <th>Base</th>
+                    <th class="text-center">Rel.</th>
+                    <th class="text-center">✅ Final.</th>
+                    <th class="text-center">🔄 Andamento</th>
+                    <th class="text-center">Rotas</th>
+                    <th class="text-center">Ocorr.</th>
+                    <th class="text-end">Total F1</th>
+                    <th class="text-end">Desc. Motor.</th>
+                    <th class="text-end">Desc. Equipe</th>
+                    <th class="text-end">Pago</th>
+                    <th class="text-end">⏱️ Tempo Méd.</th>
+                  </tr></thead>
+                  <tbody id="execPorBaseBody"><tr><td colspan="11" class="text-center text-muted p-3">Carregando...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Tabela -->
     <div class="table-responsive">
       <table class="table table-bordered table-hover align-middle">
@@ -664,11 +710,77 @@ async function carregarDashboard() {
 // ── Relatórios ────────────────────────────────────────────────────────────────
 let relatoriosCache = [];
 
+// ── Painel Executivo ──────────────────────────────────────────────────────────
+async function carregarExecutivo(baseId, dataDe, dataAte) {
+  try {
+    let url = '/api/relatorios/stats/executivo?';
+    if (baseId)  url += `base_id=${baseId}&`;
+    if (dataDe)  url += `data_de=${dataDe}&`;
+    if (dataAte) url += `data_ate=${dataAte}&`;
+
+    const data = await fetch(url).then(r => r.json());
+    if (data.erro) { console.error('executivo:', data.erro); return; }
+
+    const r = data.resumo;
+
+    // Cards
+    document.getElementById('ex-total-rel').textContent    = r.total_relatorios || 0;
+    document.getElementById('ex-finalizados').textContent  = `${r.finalizados || 0} finalizados`;
+    document.getElementById('ex-andamento').textContent    = `${r.em_andamento || 0} em andamento`;
+    document.getElementById('ex-total-rotas').textContent  = r.total_rotas || 0;
+    document.getElementById('ex-ocorrencias').textContent  = `${r.total_ocorrencias || 0} ocorrências com desconto`;
+    document.getElementById('ex-total-valor').textContent  = fmtBRL(r.total_valor);
+    document.getElementById('ex-valor-sub').innerHTML      =
+      `Motor: <strong>${fmtBRL(r.valor_motorista)}</strong> · Equipe: <strong>${fmtBRL(r.valor_equipe)}</strong> · Pago: <strong>${fmtBRL(r.valor_pago)}</strong>`;
+
+    // Tempo médio calculado da tabela por base
+    const tempos = data.porBase.map(b => +b.tempo_medio_horas).filter(t => t > 0);
+    const tempoMedio = tempos.length ? (tempos.reduce((a, b) => a + b, 0) / tempos.length).toFixed(1) : null;
+    document.getElementById('ex-tempo').textContent = tempoMedio ? `${tempoMedio}h` : '—';
+
+    // Breakdown por desconto
+    const LABELS = { nenhum:'Sem desconto', motorista:'Desc. Motorista', equipe:'Desc. Equipe', abonar:'Abonar', regularizado:'Regularizado', pago:'Pago' };
+    const CORES  = { nenhum:'#6c757d', motorista:'#dc3545', equipe:'#fd7e14', abonar:'#198754', regularizado:'#0d6efd', pago:'#6610f2' };
+    document.getElementById('execDescontos').innerHTML = data.porDesconto.length === 0
+      ? '<p class="text-muted small p-3">Nenhum dado</p>'
+      : `<table class="table table-sm mb-0">
+          <thead><tr><th>Tipo</th><th class="text-center">Qtd</th><th class="text-end">Valor Total</th></tr></thead>
+          <tbody>
+          ${data.porDesconto.map(d => `<tr>
+            <td><span class="badge" style="background:${CORES[d.status_desconto]||'#999'}">${LABELS[d.status_desconto]||d.status_desconto}</span></td>
+            <td class="text-center fw-semibold">${d.quantidade}</td>
+            <td class="text-end fw-semibold ${+d.valor_total > 0 ? 'text-danger' : ''}">${+d.valor_total > 0 ? fmtBRL(d.valor_total) : '—'}</td>
+          </tr>`).join('')}
+          </tbody>
+        </table>`;
+
+    // Por base
+    document.getElementById('execPorBaseBody').innerHTML = data.porBase.length === 0
+      ? '<tr><td colspan="11" class="text-center text-muted p-3">Nenhum dado</td></tr>'
+      : data.porBase.map(b => `<tr>
+          <td><strong>${b.base_nome}</strong><br><small class="text-muted">${b.cidade||''}</small></td>
+          <td class="text-center">${b.total_relatorios}</td>
+          <td class="text-center"><span class="badge bg-secondary">${b.finalizados}</span></td>
+          <td class="text-center"><span class="badge bg-success">${b.em_andamento}</span></td>
+          <td class="text-center">${b.total_rotas}</td>
+          <td class="text-center"><span class="badge ${+b.ocorrencias > 0 ? 'bg-danger' : 'bg-light text-dark'}">${b.ocorrencias}</span></td>
+          <td class="text-end fw-semibold ${+b.total_valor > 0 ? 'text-danger' : ''}">${+b.total_valor > 0 ? fmtBRL(b.total_valor) : '—'}</td>
+          <td class="text-end text-danger small">${+b.val_motorista > 0 ? fmtBRL(b.val_motorista) : '—'}</td>
+          <td class="text-end text-warning small">${+b.val_equipe > 0 ? fmtBRL(b.val_equipe) : '—'}</td>
+          <td class="text-end small">${+b.val_pago > 0 ? fmtBRL(b.val_pago) : '—'}</td>
+          <td class="text-end small">${b.tempo_medio_horas ? `${b.tempo_medio_horas}h` : '—'}</td>
+        </tr>`).join('');
+
+  } catch (err) { console.error('carregarExecutivo:', err); }
+}
+
 async function carregarRelatorios() {
   const baseId  = document.getElementById('filtroBase').value;
   const dataDe  = document.getElementById('filtroDataDe')?.value  || '';
   const dataAte = document.getElementById('filtroDataAte')?.value || '';
   const status  = document.getElementById('filtroStatus')?.value  || '';
+
+  carregarExecutivo(baseId, dataDe, dataAte); // painel executivo usa os mesmos filtros
 
   let url = '/api/relatorios?';
   if (baseId)  url += `base_id=${baseId}&`;
