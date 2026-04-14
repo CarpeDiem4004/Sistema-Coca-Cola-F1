@@ -930,21 +930,13 @@ async function verDetalhe(id) {
     // Célula Situação (status individual da rota)
     let situacaoCell;
     if (emAndamento) {
-      if (rotaFinalizada) {
-        situacaoCell = `<span id="sit-cell-${r.id}">
-          <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>
-          <button class="btn btn-outline-success btn-sm py-0 ms-1" onclick="alterarSituacaoRota(${r.id},'em_andamento',${id})" title="Reabrir lançamento">
-            <i class="bi bi-arrow-counterclockwise"></i>
-          </button>
-        </span>`;
-      } else {
-        situacaoCell = `<span id="sit-cell-${r.id}">
-          <span class="badge bg-success"><i class="bi bi-pencil me-1"></i>Em andamento</span>
-          <button class="btn btn-outline-secondary btn-sm py-0 ms-1" onclick="alterarSituacaoRota(${r.id},'finalizado',${id})" title="Finalizar este lançamento">
-            <i class="bi bi-lock"></i>
-          </button>
-        </span>`;
-      }
+      situacaoCell = `<span id="sit-cell-${r.id}">
+        <select class="form-select form-select-sm" style="min-width:150px"
+          onchange="alterarSituacaoRota(${r.id}, this.value, ${id})">
+          <option value="em_andamento" ${!rotaFinalizada ? 'selected' : ''}>🟢 Em andamento</option>
+          <option value="finalizado"   ${ rotaFinalizada ? 'selected' : ''}>⚫ Finalizado</option>
+        </select>
+      </span>`;
     } else {
       situacaoCell = rotaFinalizada
         ? `<span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>`
@@ -1014,11 +1006,9 @@ async function verDetalhe(id) {
 
 // ── Alterar situação individual de um lançamento ─────────────────────────────
 async function alterarSituacaoRota(rotaId, novaSituacao, relId) {
-  const acao = novaSituacao === 'finalizado' ? 'finalizar' : 'reabrir';
-  if (!confirm(`Deseja ${acao} este lançamento?`)) return;
-
   const cell = document.getElementById(`sit-cell-${rotaId}`);
-  if (cell) cell.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  const sel = cell?.querySelector('select');
+  if (sel) sel.disabled = true;
 
   try {
     const res = await fetch(`/api/relatorios/rotas/${rotaId}/situacao`, {
