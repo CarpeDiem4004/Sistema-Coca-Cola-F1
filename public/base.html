@@ -281,13 +281,13 @@
 </div>
 
 <div class="modal fade" id="modalDetalhe" tabindex="-1">
-  <div class="modal-dialog modal-xl">
+  <div class="modal-dialog modal-fullscreen-md-down modal-xl">
     <div class="modal-content">
       <div class="modal-header" style="background:var(--cc-red)">
         <h5 class="modal-title text-white fw-bold"><i class="bi bi-file-earmark-bar-graph me-2"></i>Detalhe do Relatório</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body" id="corpoDetalhe"></div>
+      <div class="modal-body p-3" id="corpoDetalhe"></div>
     </div>
   </div>
 </div>
@@ -956,92 +956,122 @@ async function verDetalhe(id) {
     </div>`;
   }
 
-  html += `<div class="table-responsive"><table class="table table-bordered table-sm">
-    <thead><tr>
-      <th>Situação</th><th>Rota</th><th>Nº F1</th><th>Motorista</th><th>Ajudante 1</th><th>Ajudante 2</th>
-      <th>Faltando</th><th>NF</th><th>Status Desc.</th><th>Vl. Desconto</th><th>Motivo</th><th>Comprovante</th>
-    </tr></thead><tbody>`;
+  html += `<div class="d-flex flex-column gap-3">`;
 
   for (const r of (rel.rotas || [])) {
-    const info = STATUS_INFO[r.status_desconto] || { label: r.status_desconto || '—', icon: '•', cor: '#999' };
+    const info = STATUS_INFO[r.status_desconto] || { label: r.status_desconto || 'Sem desconto', icon: '—', cor: '#6c757d' };
     const rotaFinalizada = r.situacao === 'finalizado';
+    const cardBorder = rotaFinalizada ? 'border-secondary' : 'border-danger';
+    const cardOpacity = rotaFinalizada ? 'opacity-75' : '';
 
-    // Célula Situação (status individual da rota)
-    let situacaoCell;
-    if (emAndamento) {
-      situacaoCell = `<span id="sit-cell-${r.id}">
-        <select class="form-select form-select-sm" style="min-width:150px"
-          onchange="alterarSituacaoRota(${r.id}, this.value, ${id})">
-          <option value="em_andamento" ${!rotaFinalizada ? 'selected' : ''}>🟢 Em andamento</option>
-          <option value="finalizado"   ${ rotaFinalizada ? 'selected' : ''}>⚫ Finalizado</option>
-        </select>
-      </span>`;
-    } else {
-      situacaoCell = rotaFinalizada
-        ? `<span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>`
-        : `<span class="badge bg-success"><i class="bi bi-pencil me-1"></i>Em andamento</span>`;
-    }
+    // Situação select ou badge
+    const situacaoCell = emAndamento
+      ? `<span id="sit-cell-${r.id}">
+           <select class="form-select form-select-sm" style="width:auto;display:inline-block"
+             onchange="alterarSituacaoRota(${r.id}, this.value, ${id})">
+             <option value="em_andamento" ${!rotaFinalizada ? 'selected' : ''}>🟢 Em andamento</option>
+             <option value="finalizado"   ${ rotaFinalizada ? 'selected' : ''}>⚫ Finalizado</option>
+           </select>
+         </span>`
+      : (rotaFinalizada
+          ? `<span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>`
+          : `<span class="badge bg-success"><i class="bi bi-pencil me-1"></i>Em andamento</span>`);
 
-    // Célula NF
+    // NF
     let nfCell;
     if (emAndamento && !rotaFinalizada) {
-      const verNf = r.nf_url
-        ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm py-0 me-1"><i class="bi bi-file-earmark-text me-1"></i>Ver</a>`
-        : '';
-      const labelNf = r.nf_url ? '<i class="bi bi-pencil"></i>' : '<i class="bi bi-upload me-1"></i>Anexar';
-      nfCell = `<span id="nf-cell-${r.id}">
-        ${verNf}<button class="btn btn-outline-warning btn-sm py-0" onclick="document.getElementById('file-nf-${r.id}').click()" title="${r.nf_url ? 'Trocar NF' : 'Anexar NF'}">${labelNf}</button>
-        <input type="file" id="file-nf-${r.id}" class="d-none" accept=".pdf,.jpg,.jpeg,.png,.webp"
-          onchange="uploadAnexoRota(this,'nf',${r.id},${id})">
+      nfCell = `<span id="nf-cell-${r.id}" class="d-flex gap-1 align-items-center flex-wrap">
+        ${r.nf_url ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm py-0"><i class="bi bi-file-earmark-text me-1"></i>Ver NF</a>` : ''}
+        <button class="btn btn-outline-warning btn-sm py-0" onclick="document.getElementById('file-nf-${r.id}').click()">
+          <i class="bi bi-${r.nf_url ? 'pencil' : 'upload'} me-1"></i>${r.nf_url ? 'Trocar' : 'Anexar NF'}
+        </button>
+        <input type="file" id="file-nf-${r.id}" class="d-none" accept=".pdf,.jpg,.jpeg,.png,.webp" onchange="uploadAnexoRota(this,'nf',${r.id},${id})">
       </span>`;
     } else {
-      nfCell = r.nf_url
-        ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm py-0"><i class="bi bi-file-earmark-text me-1"></i>Ver</a>`
-        : '—';
+      nfCell = r.nf_url ? `<a href="${r.nf_url}" target="_blank" class="btn btn-outline-secondary btn-sm py-0"><i class="bi bi-file-earmark-text me-1"></i>Ver NF</a>` : '<span class="text-muted">—</span>';
     }
 
-    // Célula Comprovante
+    // Comprovante
     let compCell;
     if (emAndamento && !rotaFinalizada) {
-      const verComp = r.comprovante_url
-        ? `<a href="${r.comprovante_url}" target="_blank" class="btn btn-outline-primary btn-sm py-0 me-1"><i class="bi bi-receipt me-1"></i>Ver</a>`
-        : '';
-      const labelComp = r.comprovante_url ? '<i class="bi bi-pencil"></i>' : '<i class="bi bi-upload me-1"></i>Anexar';
-      compCell = `<span id="comp-cell-${r.id}">
-        ${verComp}<button class="btn btn-outline-warning btn-sm py-0" onclick="document.getElementById('file-comp-${r.id}').click()" title="${r.comprovante_url ? 'Trocar comprovante' : 'Anexar comprovante'}">${labelComp}</button>
-        <input type="file" id="file-comp-${r.id}" class="d-none" accept=".pdf,.jpg,.jpeg,.png,.webp"
-          onchange="uploadAnexoRota(this,'comp',${r.id},${id})">
+      compCell = `<span id="comp-cell-${r.id}" class="d-flex gap-1 align-items-center flex-wrap">
+        ${r.comprovante_url ? `<a href="${r.comprovante_url}" target="_blank" class="btn btn-outline-primary btn-sm py-0"><i class="bi bi-receipt me-1"></i>Ver</a>` : ''}
+        <button class="btn btn-outline-warning btn-sm py-0" onclick="document.getElementById('file-comp-${r.id}').click()">
+          <i class="bi bi-${r.comprovante_url ? 'pencil' : 'upload'} me-1"></i>${r.comprovante_url ? 'Trocar' : 'Anexar'}
+        </button>
+        <input type="file" id="file-comp-${r.id}" class="d-none" accept=".pdf,.jpg,.jpeg,.png,.webp" onchange="uploadAnexoRota(this,'comp',${r.id},${id})">
       </span>`;
     } else {
-      compCell = r.comprovante_url
-        ? `<a href="${r.comprovante_url}" target="_blank" class="btn btn-outline-primary btn-sm py-0"><i class="bi bi-receipt me-1"></i>Ver</a>`
-        : '—';
+      compCell = r.comprovante_url ? `<a href="${r.comprovante_url}" target="_blank" class="btn btn-outline-primary btn-sm py-0"><i class="bi bi-receipt me-1"></i>Ver</a>` : '<span class="text-muted">—</span>';
     }
 
-    html += `<tr class="${rotaFinalizada ? 'table-light text-muted' : ''}">
-      <td>${situacaoCell}</td>
-      <td class="fw-bold">${r.numero_rota}</td>
-      <td>${r.numero_f1 || '—'}</td>
-      <td>${r.motorista_nome || '—'}</td>
-      <td>${r.ajudante_nome  || '—'}</td>
-      <td>${r.ajudante2_nome || '—'}</td>
-      <td>${r.mercadorias_faltando || '—'}</td>
-      <td>${nfCell}</td>
-      <td id="desc-cell-${r.id}">
-        ${emAndamento && !rotaFinalizada
-          ? `<button class="btn btn-sm btn-outline-secondary py-0" onclick="abrirEditarDesconto(${r.id},${id})">
-               <span style="color:${info.cor};font-weight:600">${info.icon} ${info.label}</span>
-               <i class="bi bi-pencil ms-1 small"></i>
-             </button>`
-          : `<span style="color:${info.cor};font-weight:600">${info.icon} ${info.label}</span>`
-        }
-      </td>
-      <td class="text-danger fw-bold">${+r.valor_desconto > 0 ? fmtBRL(r.valor_desconto) : '—'}</td>
-      <td>${r.motivo_desconto || '—'}</td>
-      <td>${compCell}</td>
-    </tr>`;
+    // Status desconto editável
+    const descCell = `<span id="desc-cell-${r.id}">
+      ${emAndamento && !rotaFinalizada
+        ? `<button class="btn btn-sm py-0 px-2" style="border:1px solid ${info.cor};color:${info.cor}" onclick="abrirEditarDesconto(${r.id},${id})">
+             ${info.icon} ${info.label} <i class="bi bi-pencil ms-1" style="font-size:.7rem"></i>
+           </button>`
+        : `<span style="color:${info.cor};font-weight:600">${info.icon} ${info.label}</span>`
+      }
+    </span>`;
+
+    html += `
+    <div class="card border ${cardBorder} ${cardOpacity} shadow-sm">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:${rotaFinalizada ? '#f8f9fa' : '#fff5f5'}">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <span class="fw-bold text-danger fs-6"><i class="bi bi-signpost-2 me-1"></i>${r.numero_rota}</span>
+          ${r.numero_f1 ? `<span class="badge bg-light border text-dark">F1: ${r.numero_f1}</span>` : ''}
+          ${situacaoCell}
+        </div>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          ${nfCell}
+          ${compCell}
+        </div>
+      </div>
+      <div class="card-body py-2">
+        <div class="row g-2">
+          <div class="col-md-3">
+            <div class="text-muted small mb-1"><i class="bi bi-truck me-1"></i>Motorista</div>
+            <div class="fw-semibold">${r.motorista_nome || '<span class="text-muted">—</span>'}</div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-muted small mb-1"><i class="bi bi-person me-1"></i>Ajudante 1</div>
+            <div class="fw-semibold">${r.ajudante_nome || '<span class="text-muted">—</span>'}</div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-muted small mb-1"><i class="bi bi-person me-1"></i>Ajudante 2</div>
+            <div class="fw-semibold">${r.ajudante2_nome || '<span class="text-muted">—</span>'}</div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-muted small mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Mercadorias Faltando</div>
+            <div class="${r.mercadorias_faltando ? 'text-danger fw-semibold' : 'text-muted'}">${r.mercadorias_faltando || '—'}</div>
+          </div>
+        </div>
+        ${r.status_desconto !== 'nenhum' ? `
+        <hr class="my-2">
+        <div class="row g-2 align-items-center">
+          <div class="col-md-3">
+            <div class="text-muted small mb-1">Status Desconto</div>
+            ${descCell}
+          </div>
+          <div class="col-md-2">
+            <div class="text-muted small mb-1">Vl. Desconto</div>
+            <div class="fw-bold text-danger">${+r.valor_desconto > 0 ? fmtBRL(r.valor_desconto) : '—'}</div>
+          </div>
+          <div class="col-md-7">
+            <div class="text-muted small mb-1">Motivo / Justificativa</div>
+            <div>${r.motivo_desconto || '<span class="text-muted">—</span>'}</div>
+          </div>
+        </div>` : `
+        <hr class="my-2">
+        <div class="d-flex align-items-center gap-2">
+          <div class="text-muted small">Status Desconto:</div>
+          ${descCell}
+        </div>`}
+      </div>
+    </div>`;
   }
-  html += '</tbody></table></div>';
+  html += `</div>`;
 
   document.getElementById('corpoDetalhe').innerHTML = html;
   // Se o modal já estiver aberto (ex: refresh após upload), só atualiza o conteúdo
