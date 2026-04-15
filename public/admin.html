@@ -68,6 +68,7 @@
     <button class="nav-tab-btn" onclick="showTab('alertas', this)" id="tabBtnAlertas"><i class="bi bi-exclamation-triangle me-1"></i>Alertas</button>
     <button class="nav-tab-btn d-none" onclick="showTab('gerentes', this)" id="tabBtnGerentes"><i class="bi bi-shield-lock me-1"></i>Gerentes</button>
     <button class="nav-tab-btn d-none" onclick="showTab('coordenadores', this)" id="tabBtnCoord"><i class="bi bi-diagram-3 me-1"></i>Coordenadores</button>
+    <button class="nav-tab-btn d-none" onclick="showTab('inativos', this)" id="tabBtnInativos"><i class="bi bi-slash-circle me-1"></i>Inativos</button>
   </div>
 
   <!-- ════════════ DASHBOARD ════════════ -->
@@ -329,6 +330,59 @@
   </div>
 
   <!-- ════════════ GERENTES ════════════ -->
+  <!-- ── ABA: INATIVOS ── -->
+  <div id="tab-inativos" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <h5 class="fw-bold mb-0"><i class="bi bi-slash-circle text-danger me-2"></i>Lançamentos Inativados</h5>
+      <button class="btn btn-outline-secondary btn-sm" onclick="carregarInativos()">
+        <i class="bi bi-arrow-clockwise me-1"></i>Atualizar
+      </button>
+    </div>
+    <div class="alert alert-secondary small mb-3">
+      <i class="bi bi-info-circle-fill me-2"></i>
+      Lançamentos inativados <strong>não aparecem</strong> nas listagens normais nem afetam estatísticas.
+      Os dados ficam preservados para auditoria.
+    </div>
+
+    <!-- Filtros -->
+    <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+      <div>
+        <label class="form-label small fw-semibold mb-1">Base</label>
+        <select id="filtroInativoBase" class="form-select form-select-sm" style="width:190px" onchange="carregarInativos()">
+          <option value="">Todas as bases</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">De</label>
+        <input type="date" id="filtroInativoDe" class="form-control form-control-sm" style="width:150px" onchange="carregarInativos()" />
+      </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">Até</label>
+        <input type="date" id="filtroInativoAte" class="form-control form-control-sm" style="width:150px" onchange="carregarInativos()" />
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover table-sm align-middle">
+        <thead class="table-dark">
+          <tr>
+            <th>Base</th>
+            <th>Data Ref.</th>
+            <th>Postado em / Por</th>
+            <th class="text-center">Rotas</th>
+            <th>Inativado por</th>
+            <th>Inativado em</th>
+            <th>Motivo</th>
+            <th class="text-center">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbInativos">
+          <tr><td colspan="8" class="text-center text-muted py-4">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <div id="tab-gerentes" class="section bg-white rounded-bottom rounded-end p-4 shadow-sm">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h5 class="fw-bold mb-0"><i class="bi bi-shield-lock text-danger me-2"></i>Gerentes do Sistema</h5>
@@ -553,6 +607,7 @@ let isCeo = false;
   if (isCeo) {
     document.getElementById('tabBtnGerentes').classList.remove('d-none');
     document.getElementById('tabBtnCoord').classList.remove('d-none');
+    document.getElementById('tabBtnInativos').classList.remove('d-none');
     document.getElementById('filtroInativoWrap').classList.remove('d-none');
     document.getElementById('filtroInativoWrap').classList.add('d-flex');
   }
@@ -589,6 +644,7 @@ function showTab(tab, btn) {
   if (tab === 'alertas')       carregarAlertas();
   if (tab === 'gerentes')      carregarGerentes();
   if (tab === 'coordenadores') carregarCoordenadores();
+  if (tab === 'inativos')      carregarInativos();
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -1103,6 +1159,59 @@ async function verDetalhe(id) {
   html += '</tbody></table></div>';
   document.getElementById('corpoDetalhe').innerHTML = html;
   new bootstrap.Modal(document.getElementById('modalDetalhe')).show();
+}
+
+// ── Aba Inativos ──────────────────────────────────────────────────────────────
+async function carregarInativos() {
+  const baseId  = document.getElementById('filtroInativoBase')?.value || '';
+  const dataDe  = document.getElementById('filtroInativoDe')?.value  || '';
+  const dataAte = document.getElementById('filtroInativoAte')?.value || '';
+
+  // Preenche o select de bases com o cache já carregado
+  const sel = document.getElementById('filtroInativoBase');
+  if (sel && sel.options.length <= 1 && basesCache.length > 0) {
+    sel.innerHTML = '<option value="">Todas as bases</option>' +
+      basesCache.map(b => `<option value="${b.id}">${b.nome}</option>`).join('');
+  }
+
+  let url = '/api/relatorios?incluir_inativos=1&';
+  if (baseId)  url += `base_id=${baseId}&`;
+  if (dataDe)  url += `data_de=${dataDe}&`;
+  if (dataAte) url += `data_ate=${dataAte}&`;
+
+  const lista = await fetch(url).then(r => r.json());
+  const inativos = lista.filter(r => r.ativo === 0);
+  const tb = document.getElementById('tbInativos');
+
+  if (inativos.length === 0) {
+    tb.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-check-circle-fill text-success me-2"></i>Nenhum lançamento inativo encontrado.</td></tr>';
+    return;
+  }
+
+  tb.innerHTML = inativos.map(r => `
+    <tr class="table-secondary">
+      <td>
+        <div class="fw-bold">${r.base_nome}</div>
+        <small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.cidade||'—'}</small>
+      </td>
+      <td class="fw-semibold">${r.data_referencia}</td>
+      <td>
+        <small>${new Date(r.postado_em).toLocaleString('pt-BR')}</small>
+        ${r.criado_por_nome ? `<div class="text-muted" style="font-size:.72rem"><i class="bi bi-person me-1"></i>${r.criado_por_nome} <span class="opacity-75">(${labelTipo(r.criado_por_tipo)})</span></div>` : ''}
+      </td>
+      <td class="text-center"><span class="badge bg-secondary">${r.total_rotas}</span></td>
+      <td>
+        <strong>${r.inativado_por_nome||'—'}</strong>
+        ${r.inativado_por_tipo ? `<div class="text-muted" style="font-size:.72rem">${labelTipo(r.inativado_por_tipo)}</div>` : ''}
+      </td>
+      <td><small>${r.inativado_em ? new Date(r.inativado_em).toLocaleString('pt-BR') : '—'}</small></td>
+      <td><span class="text-muted fst-italic small">${r.motivo_inativacao||'—'}</span></td>
+      <td class="text-center">
+        <button class="btn btn-outline-secondary btn-sm px-2" onclick="verDetalhe(${r.id})" title="Ver detalhes">
+          <i class="bi bi-eye"></i>
+        </button>
+      </td>
+    </tr>`).join('');
 }
 
 // ── Inativar lançamento (somente CEO) ────────────────────────────────────────
