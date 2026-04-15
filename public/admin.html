@@ -205,6 +205,12 @@
           <option value="finalizado">Finalizado</option>
         </select>
       </div>
+      <div id="filtroInativoWrap" class="d-none align-items-end">
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="checkbox" id="filtroInativos" onchange="carregarRelatorios()">
+          <label class="form-check-label small fw-semibold" for="filtroInativos">Incluir inativos</label>
+        </div>
+      </div>
       <div class="ms-auto d-flex gap-2 align-items-end">
         <button class="btn btn-outline-secondary btn-sm" onclick="carregarRelatorios()">
           <i class="bi bi-arrow-clockwise me-1"></i>Atualizar
@@ -547,6 +553,8 @@ let isCeo = false;
   if (isCeo) {
     document.getElementById('tabBtnGerentes').classList.remove('d-none');
     document.getElementById('tabBtnCoord').classList.remove('d-none');
+    document.getElementById('filtroInativoWrap').classList.remove('d-none');
+    document.getElementById('filtroInativoWrap').classList.add('d-flex');
   }
 
   // Mostrar nome do usuário na navbar
@@ -782,11 +790,14 @@ async function carregarRelatorios() {
 
   carregarExecutivo(baseId, dataDe, dataAte); // painel executivo usa os mesmos filtros
 
+  const incluirInativos = document.getElementById('filtroInativos')?.checked;
+
   let url = '/api/relatorios?';
-  if (baseId)  url += `base_id=${baseId}&`;
-  if (dataDe)  url += `data_de=${dataDe}&`;
-  if (dataAte) url += `data_ate=${dataAte}&`;
-  if (status)  url += `status=${status}&`;
+  if (baseId)          url += `base_id=${baseId}&`;
+  if (dataDe)          url += `data_de=${dataDe}&`;
+  if (dataAte)         url += `data_ate=${dataAte}&`;
+  if (status)          url += `status=${status}&`;
+  if (incluirInativos) url += `incluir_inativos=1&`;
 
   relatoriosCache = await fetch(url).then(r => r.json());
   const tb = document.getElementById('tbRelatorios');
@@ -811,10 +822,11 @@ async function carregarRelatorios() {
 
   tb.innerHTML = relatoriosCache.map(r => {
     const finalizado = r.status === 'finalizado';
+    const inativo    = r.ativo === 0;
     const ocorr      = Number(r.total_ocorrencias || 0);
     const vlTotal    = Number(r.total_valor_f1    || 0);
 
-    return `<tr>
+    return `<tr class="${inativo ? 'table-secondary text-muted opacity-75' : ''}">
       <td>
         <div class="fw-bold">${r.base_nome}</div>
         <small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${r.cidade||'—'}</small>
@@ -834,9 +846,11 @@ async function carregarRelatorios() {
         ${fmtBRL(vlTotal)}
       </td>
       <td class="text-center">
-        ${finalizado
-          ? `<span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>`
-          : `<span class="badge bg-success"><i class="bi bi-pencil me-1"></i>Em andamento</span>`}
+        ${inativo
+          ? `<span class="badge bg-dark"><i class="bi bi-slash-circle me-1"></i>Inativo</span>`
+          : finalizado
+            ? `<span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Finalizado</span>`
+            : `<span class="badge bg-success"><i class="bi bi-pencil me-1"></i>Em andamento</span>`}
       </td>
       <td class="text-center">
         <div class="d-flex gap-1 justify-content-center">
@@ -970,17 +984,48 @@ async function verDetalhe(id) {
     if (rel.erro) { alert('Erro: ' + rel.erro); return; }
   } catch(e) { alert('Erro ao carregar relatório.'); return; }
   const finalizado = rel.status === 'finalizado';
-  let html  = `
-    <div class="d-flex justify-content-between align-items-start mb-2">
+  const inativo    = rel.ativo === 0;
+
+  let html = `
+    <div class="d-flex justify-content-between align-items-start mb-2 flex-wrap gap-2">
       <div>
         <h6 class="fw-bold text-danger mb-0">${rel.base_nome} — ${rel.cidade||''}</h6>
         <small class="text-muted">Referência: ${rel.data_referencia} | Postado: ${new Date(rel.postado_em).toLocaleString('pt-BR')}</small>
       </div>
-      <span class="badge fs-6 fw-normal px-3 py-2 ${finalizado ? 'bg-secondary' : 'bg-success'}">
-        <i class="bi bi-${finalizado ? 'lock-fill' : 'pencil'} me-1"></i>
-        ${finalizado ? 'Finalizado' : 'Em andamento'}
-      </span>
-    </div>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        ${inativo ? `
+          <span class="badge fs-6 fw-normal px-3 py-2 bg-dark">
+            <i class="bi bi-slash-circle me-1"></i>Inativo
+          </span>` : `
+          <span class="badge fs-6 fw-normal px-3 py-2 ${finalizado ? 'bg-secondary' : 'bg-success'}">
+            <i class="bi bi-${finalizado ? 'lock-fill' : 'pencil'} me-1"></i>
+            ${finalizado ? 'Finalizado' : 'Em andamento'}
+          </span>`}
+        ${isCeo && !inativo ? `
+          <button class="btn btn-outline-danger btn-sm" onclick="inativarRelatorio(${rel.id})">
+            <i class="bi bi-slash-circle me-1"></i>Inativar lançamento
+          </button>` : ''}
+      </div>
+    </div>`;
+
+  // Banner de aviso quando inativo
+  if (inativo) {
+    html += `
+    <div class="alert alert-dark d-flex align-items-start gap-2 py-2 mb-3" role="alert">
+      <i class="bi bi-exclamation-octagon-fill fs-5 mt-1"></i>
+      <div>
+        <strong>Lançamento inativado</strong> — este registro foi marcado como inativo e não aparece nas listagens normais.<br>
+        <span class="small text-muted">
+          Inativado por <strong>${rel.inativado_por_nome||'—'}</strong>
+          <span class="badge bg-secondary ms-1" style="font-size:.7rem">${labelTipo(rel.inativado_por_tipo)}</span>
+          em ${rel.inativado_em ? new Date(rel.inativado_em).toLocaleString('pt-BR') : '—'}
+          ${rel.motivo_inativacao ? `— Motivo: <em>${rel.motivo_inativacao}</em>` : ''}
+        </span>
+      </div>
+    </div>`;
+  }
+
+  html += `
     <div class="border rounded mb-3" style="background:#fafafa;overflow:hidden">
       <div class="px-3 py-2 d-flex align-items-center gap-2" style="border-bottom:1px solid #eee">
         <i class="bi bi-send-fill text-success"></i>
@@ -1058,6 +1103,28 @@ async function verDetalhe(id) {
   html += '</tbody></table></div>';
   document.getElementById('corpoDetalhe').innerHTML = html;
   new bootstrap.Modal(document.getElementById('modalDetalhe')).show();
+}
+
+// ── Inativar lançamento (somente CEO) ────────────────────────────────────────
+async function inativarRelatorio(id) {
+  const motivo = prompt('Informe o motivo da inativação deste lançamento:\n(Ex: base errada, duplicado, erro de lançamento)');
+  if (motivo === null) return; // cancelou
+  if (!motivo.trim()) { alert('O motivo é obrigatório para inativar.'); return; }
+
+  if (!confirm(`Confirma a inativação deste lançamento?\n\nMotivo: "${motivo.trim()}"\n\nO registro não será apagado, mas ficará oculto nas listagens.`)) return;
+
+  const resp = await fetch(`/api/relatorios/${id}/inativar`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ motivo })
+  });
+  const data = await resp.json();
+  if (!resp.ok) { alert('Erro: ' + (data.erro || 'Não foi possível inativar.')); return; }
+
+  // Fecha o modal e recarrega a lista
+  bootstrap.Modal.getInstance(document.getElementById('modalDetalhe'))?.hide();
+  await carregarRelatorios();
+  alert('Lançamento inativado com sucesso.');
 }
 
 // ── Bases ─────────────────────────────────────────────────────────────────────

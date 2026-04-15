@@ -63,6 +63,12 @@ router.get('/', auth, async (req, res) => {
       where += ` AND r.status = $${params.length}`;
     }
 
+    // Por padrão oculta inativos; admin pode ver todos com ?incluir_inativos=1
+    const incluirInativos = req.session.isAdmin && req.query.incluir_inativos === '1';
+    if (!incluirInativos) {
+      where += ` AND (r.ativo IS NULL OR r.ativo = 1)`;
+    }
+
     const rows = await db.pool.query(`
       SELECT r.*,
              b.nome  AS base_nome,
@@ -319,6 +325,38 @@ router.get('/stats/funcionario', auth, async (req, res) => {
     `, paramsRotas);
 
     res.json({ funcionarios: funcResult.rows, rotas: rotasResult.rows });
+  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
+// ── Inativar relatório (somente admin/CEO — sem apagar dados) ────────────────
+router.put('/:id/inativar', auth, async (req, res) => {
+  if (!req.session.isAdmin)
+    return res.status(403).json({ erro: 'Sem permissão. Apenas administradores podem inativar lançamentos.' });
+
+  try {
+    const rel = await db.get('SELECT * FROM relatorios WHERE id = ?', [req.params.id]);
+    if (!rel) return res.status(404).json({ erro: 'Relatório não encontrado.' });
+    if (rel.ativo === 0) return res.status(409).json({ erro: 'Este lançamento já está inativo.' });
+
+    const { motivo } = req.body;
+    if (!motivo || !motivo.trim())
+      return res.status(400).json({ erro: 'Informe o motivo da inativação.' });
+
+    const tipo = tipoAtor(req.session);
+    const nome = req.session.nome || req.session.usuario;
+
+    await db.run(
+      `UPDATE relatorios
+          SET ativo              = 0,
+              inativado_por_tipo = ?,
+              inativado_por_nome = ?,
+              inativado_em       = NOW(),
+              motivo_inativacao  = ?
+        WHERE id = ?`,
+      [tipo, nome, motivo.trim(), req.params.id]
+    );
+
+    res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
@@ -594,11 +632,16 @@ router.get('/:id', auth, async (req, res) => {
     `, [req.params.id]);
 
     if (!rel) return res.status(404).json({ erro: 'Relatório não encontrado.' });
+
     const coordBases = (req.session.coordenadorBases || []).map(Number);
     if (!req.session.isAdmin &&
         !coordBases.includes(Number(rel.base_id)) &&
         Number(rel.base_id) !== Number(req.session.userId))
       return res.status(403).json({ erro: 'Sem permissão.' });
+
+    // Não-admins não conseguem ver lançamentos inativos
+    if (rel.ativo === 0 && !req.session.isAdmin)
+      return res.status(403).json({ erro: 'Este lançamento foi inativado.' });
 
     const rotas = await db.all(`
       SELECT rt.*,
@@ -645,6 +688,10 @@ router.post('/', auth, async (req, res) => {
       'SELECT id, status FROM relatorios WHERE base_id = ? AND data_referencia = ?',
       [baseId, data_referencia]
     );
+
+    // ── Relatório inativo → bloquear ─────────────────────────────────────────
+    if (jaExiste && jaExiste.ativo === 0)
+      return res.status(409).json({ erro: 'inativo', msg: 'Este lançamento foi inativado e não pode ser alterado.' });
 
     // ── Relatório finalizado → bloquear ───────────────────────────────────────
     if (jaExiste && jaExiste.status === 'finalizado')

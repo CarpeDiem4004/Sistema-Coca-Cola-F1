@@ -18,6 +18,13 @@ async function runMigrations() {
     `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS finalizado_por_tipo TEXT`,
     `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS finalizado_por_nome TEXT`,
     `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS finalizado_em       TIMESTAMP`,
+    // Inativação de lançamento (sem apagar dados)
+    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS ativo               INTEGER DEFAULT 1`,
+    `UPDATE relatorios SET ativo = 1 WHERE ativo IS NULL`,
+    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS inativado_por_tipo  TEXT`,
+    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS inativado_por_nome  TEXT`,
+    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS inativado_em        TIMESTAMP`,
+    `ALTER TABLE relatorios ADD COLUMN IF NOT EXISTS motivo_inativacao   TEXT`,
 
     // ── Tabela: rotas ───────────────────────────────────────────────────────
     `ALTER TABLE rotas ADD COLUMN IF NOT EXISTS numero_f1        TEXT`,
