@@ -711,6 +711,26 @@ async function enviarRelatorio() {
     reativarBotao(); return;
   }
 
+  // ── Verificar duplicatas de número de transporte ──────────────────────────
+  try {
+    const numeros = rotas.map(r => r.numero_rota).filter(Boolean);
+    const checkRes = await fetch(`/api/relatorios/verificar-duplicatas?numeros=${encodeURIComponent(numeros.join(','))}`);
+    if (checkRes.ok) {
+      const checkData = await checkRes.json();
+      if (checkData.duplicatas && checkData.duplicatas.length > 0) {
+        const lista = checkData.duplicatas.map(d => `• ${d.numero_rota} (${d.data_referencia})`).join('\n');
+        const continuar = confirm(
+          `⚠️ Os seguintes números de transporte já foram lançados anteriormente:\n\n${lista}\n\nDeseja continuar mesmo assim?`
+        );
+        if (!continuar) {
+          mostrarAlerta(alerta, 'warning', 'Envio cancelado. Verifique os números de transporte antes de prosseguir.');
+          reativarBotao();
+          return;
+        }
+      }
+    }
+  } catch (_) { /* falha silenciosa — não bloqueia o envio */ }
+
   try {
     const res  = await fetch('/api/relatorios', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data_referencia: dataRef, rotas }) });
     const data = await res.json();

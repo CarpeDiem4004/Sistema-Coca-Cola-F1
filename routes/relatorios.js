@@ -622,6 +622,38 @@ router.put('/rotas/:rotaId/anexos', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
+// ── Verificar duplicatas de número de transporte ─────────────────────────────
+router.get('/verificar-duplicatas', auth, async (req, res) => {
+  try {
+    let baseId;
+    if (req.session.isAdmin) {
+      baseId = req.session.userId;
+    } else if (req.session.isCoordinador) {
+      baseId = req.query.base_id;
+      if (!baseId) return res.json({ duplicatas: [] });
+    } else {
+      baseId = req.session.userId;
+    }
+
+    const numerosRaw = req.query.numeros || '';
+    const numeros = numerosRaw.split(',').map(n => n.trim()).filter(Boolean);
+    if (numeros.length === 0) return res.json({ duplicatas: [] });
+
+    const placeholders = numeros.map((_, i) => `$${i + 2}`).join(',');
+    const duplicatas = await db.all(`
+      SELECT ro.numero_rota, rel.data_referencia
+      FROM rotas ro
+      JOIN relatorios rel ON ro.relatorio_id = rel.id
+      WHERE rel.base_id = $1
+        AND ro.numero_rota IN (${placeholders})
+        AND rel.ativo = 1
+      ORDER BY rel.data_referencia DESC
+    `, [baseId, ...numeros]);
+
+    res.json({ duplicatas });
+  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
 // ── Detalhe de um relatório (com rotas) ── DEVE VIR POR ÚLTIMO ───────────────
 router.get('/:id', auth, async (req, res) => {
   try {
