@@ -15,6 +15,7 @@ router.post('/login', async (req, res) => {
       req.session.userId     = base.id;
       req.session.usuario    = base.usuario;
       req.session.nome       = base.nome;
+      req.session.baseNome   = base.nome;
       req.session.isAdmin    = !!base.is_admin;
       req.session.isCeo      = !!base.is_admin;   // CEO = admin principal da bases
       req.session.operadorId = null;
@@ -118,15 +119,27 @@ router.post('/logout', (req, res) => {
 router.get('/me', (req, res) => {
   if (!req.session.userId) return res.status(401).json({ erro: 'Não autenticado.' });
   res.json({
-    id:              req.session.userId,
-    nome:            req.session.nome,
-    usuario:         req.session.usuario,
-    isAdmin:         !!req.session.isAdmin,
-    isCeo:           !!req.session.isCeo,
-    isCoordinador:   !!req.session.isCoordinador,
+    id:               req.session.userId,
+    nome:             req.session.nome,
+    usuario:          req.session.usuario,
+    baseNome:         req.session.baseNome || null,
+    isAdmin:          !!req.session.isAdmin,
+    isCeo:            !!req.session.isCeo,
+    isCoordinador:    !!req.session.isCoordinador,
     coordenadorBases: req.session.coordenadorBases || [],
-    operadorId:      req.session.operadorId || null
+    operadorId:       req.session.operadorId || null
   });
+});
+
+// ── Identificar operador manual (login de base sem operador individual) ────────
+router.post('/identificar', (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ erro: 'Não autenticado.' });
+  if (req.session.isAdmin || req.session.operadorId)
+    return res.status(400).json({ erro: 'Apenas login de base pode usar esta rota.' });
+  const nome = (req.body.nome || '').trim();
+  if (!nome) return res.status(400).json({ erro: 'Nome obrigatório.' });
+  req.session.nome = `${nome} (${req.session.baseNome || req.session.usuario})`;
+  res.json({ ok: true, nome: req.session.nome });
 });
 
 module.exports = router;

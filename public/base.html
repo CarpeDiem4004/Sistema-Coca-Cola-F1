@@ -206,6 +206,30 @@
 
 </div><!-- /container -->
 
+<!-- Modal: identificar operador (login de base sem operador individual) -->
+<div class="modal fade" id="modalIdentificar" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cc-red)">
+        <h5 class="modal-title text-white fw-bold"><i class="bi bi-person-badge me-2"></i>Quem está operando?</h5>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Informe o seu nome para registrar quem está lançando os relatórios desta sessão.</p>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Seu nome</label>
+          <input type="text" id="inputNomeOperador" class="form-control" placeholder="Ex: João Silva"
+                 onkeydown="if(event.key==='Enter') confirmarIdentificacao()" />
+        </div>
+        <div id="erroIdentificacao" class="text-danger small d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary btn-sm" onclick="ignorarIdentificacao()">Continuar sem identificar</button>
+        <button class="btn btn-red" onclick="confirmarIdentificacao()"><i class="bi bi-check-lg me-1"></i>Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: cadastrar funcionário -->
 <div class="modal fade" id="modalFunc" tabindex="-1">
   <div class="modal-dialog">
@@ -311,10 +335,36 @@ let rotaIdx = 0;
 
   await carregarFuncionarios();
   await carregarHistorico();
-  carregarStats(); // carrega stats em paralelo (sem await para não bloquear)
+  carregarStats();
   addRota();
   await verificarData();
+
+  // Se logou com conta da base (sem operador individual), pedir identificação
+  if (!me.operadorId && !me.isAdmin && me.baseNome && me.nome === me.baseNome) {
+    new bootstrap.Modal(document.getElementById('modalIdentificar')).show();
+    setTimeout(() => document.getElementById('inputNomeOperador').focus(), 400);
+  }
 })();
+
+async function confirmarIdentificacao() {
+  const nome = document.getElementById('inputNomeOperador').value.trim();
+  const erro = document.getElementById('erroIdentificacao');
+  if (!nome) { erro.textContent = 'Informe seu nome.'; erro.classList.remove('d-none'); return; }
+  erro.classList.add('d-none');
+  const res = await fetch('/api/auth/identificar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome })
+  });
+  const data = await res.json();
+  if (!res.ok) { erro.textContent = data.erro || 'Erro ao identificar.'; erro.classList.remove('d-none'); return; }
+  document.getElementById('nomeBase').textContent = data.nome;
+  bootstrap.Modal.getInstance(document.getElementById('modalIdentificar')).hide();
+}
+
+function ignorarIdentificacao() {
+  bootstrap.Modal.getInstance(document.getElementById('modalIdentificar')).hide();
+}
 
 function showTab(tab, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
