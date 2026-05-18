@@ -312,6 +312,7 @@
                   <th>Status Desconto</th>
                   <th class="text-end">Vl. F1</th>
                   <th>Motivo/Justificativa</th>
+                  <th class="text-center">Comprovante</th>
                 </tr>
               </thead>
               <tbody id="tbDetalhesF1"></tbody>
@@ -886,7 +887,7 @@ async function carregarDetalhesF1(baseId, dataDe, dataAte, status, incluirInativ
   document.getElementById('detalhesF1Count').textContent = `${rotas.length} rota(s)`;
 
   if (rotas.length === 0) {
-    tb.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">Nenhuma rota encontrada para os filtros selecionados.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-3">Nenhuma rota encontrada para os filtros selecionados.</td></tr>';
     return;
   }
 
@@ -903,6 +904,11 @@ async function carregarDetalhesF1(baseId, dataDe, dataAte, status, incluirInativ
       <td>${badgeStatus(r.status_desconto, r.valor_desconto)}</td>
       <td class="text-end fw-bold ${vlDesc > 0 ? 'text-danger' : 'text-muted'}">${fmtBRL(vlDesc)}</td>
       <td>${r.motivo_desconto || '—'}</td>
+      <td class="text-center">
+        ${r.comprovante_url
+          ? `<button onclick="verAnexo('${r.comprovante_url}','Comprovante – Rota ${r.numero_rota}')" class="btn btn-outline-success btn-sm py-0"><i class="bi bi-receipt me-1"></i>Ver</button>`
+          : r.status_desconto === 'pago' ? '<span class="text-muted small">Sem anexo</span>' : '—'}
+      </td>
     </tr>`;
   }).join('');
 }
