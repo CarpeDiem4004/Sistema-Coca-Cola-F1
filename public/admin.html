@@ -289,6 +289,37 @@
         <tbody id="tbRelatorios"></tbody>
       </table>
     </div>
+
+    <!-- Painel Detalhes F1 por Rota (visível quando uma base específica é selecionada) -->
+    <div id="painelDetalhesF1" class="d-none mt-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header py-2 fw-semibold small bg-light d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-table me-1 text-danger"></i>Detalhes F1 por Rota</span>
+          <span class="badge bg-secondary" id="detalhesF1Count">0 rotas</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive" style="max-height:500px;overflow-y:auto">
+            <table class="table table-sm table-bordered table-hover align-middle mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th>Data Ref.</th>
+                  <th>Nº Transporte</th>
+                  <th>Nº F1</th>
+                  <th>Motorista</th>
+                  <th>Ajudante 1</th>
+                  <th>Ajudante 2</th>
+                  <th>Mercadorias Faltando</th>
+                  <th>Status Desconto</th>
+                  <th class="text-end">Vl. F1</th>
+                  <th>Motivo/Justificativa</th>
+                </tr>
+              </thead>
+              <tbody id="tbDetalhesF1"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ════════════ BASES ════════════ -->
@@ -838,6 +869,44 @@ async function carregarExecutivo(baseId, dataDe, dataAte) {
   } catch (err) { console.error('carregarExecutivo:', err); }
 }
 
+async function carregarDetalhesF1(baseId, dataDe, dataAte, status, incluirInativos) {
+  const painel = document.getElementById('painelDetalhesF1');
+  if (!baseId) { painel.classList.add('d-none'); return; }
+  painel.classList.remove('d-none');
+
+  let url = '/api/relatorios/rotas/detalhes?';
+  if (baseId)          url += `base_id=${baseId}&`;
+  if (dataDe)          url += `data_de=${dataDe}&`;
+  if (dataAte)         url += `data_ate=${dataAte}&`;
+  if (status)          url += `status=${status}&`;
+  if (incluirInativos) url += `incluir_inativos=1&`;
+
+  const rotas = await fetch(url).then(r => r.json());
+  const tb = document.getElementById('tbDetalhesF1');
+  document.getElementById('detalhesF1Count').textContent = `${rotas.length} rota(s)`;
+
+  if (rotas.length === 0) {
+    tb.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">Nenhuma rota encontrada para os filtros selecionados.</td></tr>';
+    return;
+  }
+
+  tb.innerHTML = rotas.map(r => {
+    const vlDesc = Number(r.valor_desconto || 0);
+    return `<tr class="${r.desconto_equipe ? 'table-warning' : ''}">
+      <td class="fw-semibold">${r.data_referencia}</td>
+      <td><strong>${r.numero_rota}</strong></td>
+      <td>${r.numero_f1 || '—'}</td>
+      <td>${r.motorista_nome || '—'}</td>
+      <td>${r.ajudante_nome || '—'}</td>
+      <td>${r.ajudante2_nome || '—'}</td>
+      <td>${r.mercadorias_faltando ? `<span class="text-danger">${r.mercadorias_faltando}</span>` : '—'}</td>
+      <td>${badgeStatus(r.status_desconto, r.valor_desconto)}</td>
+      <td class="text-end fw-bold ${vlDesc > 0 ? 'text-danger' : 'text-muted'}">${fmtBRL(vlDesc)}</td>
+      <td>${r.motivo_desconto || '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
 async function carregarRelatorios() {
   const baseId  = document.getElementById('filtroBase').value;
   const dataDe  = document.getElementById('filtroDataDe')?.value  || '';
@@ -920,6 +989,8 @@ async function carregarRelatorios() {
       </td>
     </tr>`;
   }).join('');
+
+  await carregarDetalhesF1(baseId, dataDe, dataAte, status, incluirInativos);
 }
 
 // ── Exportar CSV (todos os relatórios filtrados) ──────────────────────────────

@@ -654,6 +654,72 @@ router.get('/verificar-duplicatas', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
 });
 
+// ── Detalhes de todas as rotas filtradas (admin/coordenador) ─────────────────
+router.get('/rotas/detalhes', auth, async (req, res) => {
+  try {
+    const { base_id, data_de, data_ate, status } = req.query;
+    const params = [];
+    let where = 'WHERE 1=1';
+
+    if (req.session.isCoordinador) {
+      const bases = req.session.coordenadorBases || [];
+      if (bases.length === 0) return res.json([]);
+      params.push(bases);
+      where += ` AND r.base_id = ANY($${params.length}::int[])`;
+      if (base_id && bases.map(Number).includes(Number(base_id))) {
+        params.push(base_id);
+        where += ` AND r.base_id = $${params.length}`;
+      }
+    } else if (!req.session.isAdmin) {
+      params.push(req.session.userId);
+      where += ` AND r.base_id = $${params.length}`;
+    } else if (base_id) {
+      params.push(base_id);
+      where += ` AND r.base_id = $${params.length}`;
+    }
+
+    if (data_de) { params.push(data_de); where += ` AND r.data_referencia >= $${params.length}`; }
+    if (data_ate) { params.push(data_ate); where += ` AND r.data_referencia <= $${params.length}`; }
+    if (status)  { params.push(status);  where += ` AND r.status = $${params.length}`; }
+
+    const incluirInativos = req.session.isAdmin && req.query.incluir_inativos === '1';
+    if (!incluirInativos) where += ` AND (r.ativo IS NULL OR r.ativo = 1)`;
+
+    const rows = await db.pool.query(`
+      SELECT
+        rt.id            AS rota_id,
+        rt.numero_rota,
+        rt.numero_f1,
+        rt.status_desconto,
+        rt.valor_desconto,
+        rt.motivo_desconto,
+        rt.desconto_equipe,
+        rt.mercadorias_faltando,
+        rt.nf_url,
+        rt.comprovante_url,
+        rt.situacao,
+        m.nome           AS motorista_nome,
+        a.nome           AS ajudante_nome,
+        a2.nome          AS ajudante2_nome,
+        r.id             AS relatorio_id,
+        r.data_referencia,
+        r.status         AS relatorio_status,
+        b.nome           AS base_nome,
+        b.cidade
+      FROM rotas rt
+      JOIN relatorios r  ON r.id  = rt.relatorio_id
+      JOIN bases b       ON b.id  = r.base_id
+      LEFT JOIN funcionarios m  ON m.id  = rt.motorista_id
+      LEFT JOIN funcionarios a  ON a.id  = rt.ajudante_id
+      LEFT JOIN funcionarios a2 ON a2.id = rt.ajudante2_id
+      ${where}
+      ORDER BY r.data_referencia DESC, rt.numero_rota
+    `, params);
+
+    res.json(rows.rows);
+  } catch (err) { console.error(err); res.status(500).json({ erro: 'Erro interno.' }); }
+});
+
 // ── Detalhe de um relatório (com rotas) ── DEVE VIR POR ÚLTIMO ───────────────
 router.get('/:id', auth, async (req, res) => {
   try {
