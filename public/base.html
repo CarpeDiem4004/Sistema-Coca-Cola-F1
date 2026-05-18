@@ -1110,11 +1110,8 @@ async function verDetalhe(id) {
   html += `</div>`;
 
   document.getElementById('corpoDetalhe').innerHTML = html;
-  // Se o modal já estiver aberto (ex: refresh após upload), só atualiza o conteúdo
   const modalEl = document.getElementById('modalDetalhe');
-  if (!bootstrap.Modal.getInstance(modalEl)) {
-    new bootstrap.Modal(modalEl).show();
-  }
+  (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).show();
 }
 
 // ── Editar Status do Desconto de um lançamento ───────────────────────────────
