@@ -8,37 +8,174 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
-    :root { --cc-red: #d40000; }
-    body  { background: #f0f0f0; }
+    /* ══ SISTEMA DE TEMAS ══════════════════════════════════════════════════════ */
+    :root {
+      --cc-red: #d40000;
+      /* Light Premium (padrão) */
+      --bg-page:      #f1f5f9;
+      --bg-panel:     #ffffff;
+      --bg-card:      #ffffff;
+      --bg-card-alt:  #f8fafc;
+      --text-1:       #0f172a;
+      --text-2:       #64748b;
+      --text-3:       #94a3b8;
+      --border:       #e2e8f0;
+      --shadow:       0 2px 12px rgba(0,0,0,.07);
+      --tab-bg:       #e2e8f0;
+      --tab-text:     #374151;
+      --input-bg:     #ffffff;
+      --input-border: #d1d5db;
+      --table-head:   #fde8e8;
+      --kpi-1-bg: linear-gradient(135deg,#edfaf1,#d4edda);
+      --kpi-1-c:  #155724;
+      --kpi-2-bg: linear-gradient(135deg,#fff8e1,#ffeaa7);
+      --kpi-2-c:  #856404;
+      --kpi-3-bg: linear-gradient(135deg,#fff0f0,#fdd);
+      --kpi-3-c:  #842029;
+      --kpi-4-bg: linear-gradient(135deg,#e8f0fe,#cfe2ff);
+      --kpi-4-c:  #084298;
+    }
+    [data-theme="dark"] {
+      --bg-page:      #0f172a;
+      --bg-panel:     #1e293b;
+      --bg-card:      #1e293b;
+      --bg-card-alt:  #0f172a;
+      --text-1:       #f1f5f9;
+      --text-2:       #94a3b8;
+      --text-3:       #64748b;
+      --border:       #334155;
+      --shadow:       0 4px 24px rgba(0,0,0,.5);
+      --tab-bg:       #1e293b;
+      --tab-text:     #94a3b8;
+      --input-bg:     #1e293b;
+      --input-border: #475569;
+      --table-head:   #1e3a5f;
+      --kpi-1-bg: linear-gradient(135deg,#0d2d1a,#0a3d22);
+      --kpi-1-c:  #6ee7a0;
+      --kpi-2-bg: linear-gradient(135deg,#2d2200,#3d2e00);
+      --kpi-2-c:  #ffd166;
+      --kpi-3-bg: linear-gradient(135deg,#3d0f0f,#5a1a1a);
+      --kpi-3-c:  #ff8888;
+      --kpi-4-bg: linear-gradient(135deg,#0d1e3d,#1a2d5a);
+      --kpi-4-c:  #90b8ff;
+    }
+    [data-theme="red-dark"] {
+      --bg-page:      #180808;
+      --bg-panel:     #1e1010;
+      --bg-card:      #231414;
+      --bg-card-alt:  #180808;
+      --text-1:       #fde8e8;
+      --text-2:       #c9a0a0;
+      --text-3:       #8a6060;
+      --border:       #4a1f1f;
+      --shadow:       0 4px 24px rgba(180,0,0,.25);
+      --tab-bg:       #2a1010;
+      --tab-text:     #c9a0a0;
+      --input-bg:     #231414;
+      --input-border: #6b3333;
+      --table-head:   #3d1515;
+      --kpi-1-bg: linear-gradient(135deg,#0a2e14,#0d3d1a);
+      --kpi-1-c:  #6ee7a0;
+      --kpi-2-bg: linear-gradient(135deg,#2e1c00,#3d2600);
+      --kpi-2-c:  #ffd166;
+      --kpi-3-bg: linear-gradient(135deg,#4d0808,#6b1010);
+      --kpi-3-c:  #ffaaaa;
+      --kpi-4-bg: linear-gradient(135deg,#0d0f2e,#151a4d);
+      --kpi-4-c:  #90b8ff;
+    }
+
+    /* ══ BASE ══════════════════════════════════════════════════════════════════ */
+    html, body { transition: background .25s, color .25s; }
+    body { background: var(--bg-page); color: var(--text-1); }
+
+    /* ══ OVERRIDES BOOTSTRAP COM VARIÁVEIS ═══════════════════════════════════ */
+    .section.active { background: var(--bg-panel) !important; color: var(--text-1); }
+    .bg-white       { background: var(--bg-card) !important; }
+    .bg-light       { background: var(--bg-card-alt) !important; color: var(--text-1) !important; }
+    .card           { background: var(--bg-card) !important; border-color: var(--border) !important; box-shadow: var(--shadow) !important; color: var(--text-1); }
+    .card-header    { background: var(--bg-card-alt) !important; border-color: var(--border) !important; color: var(--text-1) !important; }
+    .text-muted     { color: var(--text-2) !important; }
+    .border, .border-bottom, .border-top { border-color: var(--border) !important; }
+    .table          { --bs-table-bg: transparent; color: var(--text-1); border-color: var(--border); }
+    .table-bordered > :not(caption) > * { border-color: var(--border); }
+    .table-hover > tbody > tr:hover { --bs-table-hover-bg: rgba(128,128,128,.07); }
+    .table-light, .table-light > td, .table-light > th { background: var(--bg-card-alt) !important; color: var(--text-1) !important; border-color: var(--border) !important; }
+    .table th { background: var(--table-head) !important; color: var(--text-1) !important; border-color: var(--border) !important; }
+    .form-control, .form-select { background-color: var(--input-bg) !important; border-color: var(--input-border) !important; color: var(--text-1) !important; }
+    .form-control::placeholder { color: var(--text-3); }
+    .form-check-input { background-color: var(--input-bg); border-color: var(--input-border); }
+    .modal-content  { background: var(--bg-card) !important; border-color: var(--border) !important; color: var(--text-1); }
+    .modal-body, .modal-footer { background: var(--bg-card) !important; color: var(--text-1) !important; border-color: var(--border) !important; }
+    .modal-header   { border-color: var(--border) !important; }
+    .alert-secondary, .alert-info, .alert-light { background: var(--bg-card-alt) !important; border-color: var(--border) !important; color: var(--text-1) !important; }
+    .nav-link { color: var(--text-2) !important; }
+    .nav-link.active { color: var(--cc-red) !important; }
+    .nav-tabs { border-color: var(--border) !important; }
+    .nav-tabs .nav-link { border-color: var(--border) !important; background: var(--bg-card-alt); }
+    .nav-tabs .nav-link.active { background: var(--bg-card) !important; border-bottom-color: var(--bg-card) !important; }
+    .input-group-text { background: var(--bg-card-alt) !important; border-color: var(--input-border) !important; color: var(--text-1) !important; }
+
+    /* ══ NAVBAR ════════════════════════════════════════════════════════════════ */
     .navbar { background: var(--cc-red) !important; }
     .navbar-brand { font-weight: 900; letter-spacing: 1px; font-size: 1.3rem; }
-    .nav-tab-btn { cursor: pointer; padding: 8px 18px; border-radius: 8px 8px 0 0; background: #ddd; border: none; font-weight: 600; color: #333; }
+
+    /* ══ ABAS ══════════════════════════════════════════════════════════════════ */
+    .nav-tab-btn { cursor:pointer; padding:8px 18px; border-radius:8px 8px 0 0; background:var(--tab-bg); border:none; font-weight:600; color:var(--tab-text); transition:background .2s,color .2s; }
     .nav-tab-btn.active { background: var(--cc-red); color: #fff; }
+
+    /* ══ BOTÕES ════════════════════════════════════════════════════════════════ */
     .section { display: none; } .section.active { display: block; }
     .btn-red { background: var(--cc-red); color: #fff; border: none; }
     .btn-red:hover { background: #b50000; color: #fff; }
-    .card-base { border-radius: 12px; border: none; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
-    .postou   { border-left: 5px solid #28a745; }
-    .nao-postou { border-left: 5px solid #dc3545; }
-    .stat-box { text-align:center; padding: 12px; border-radius: 10px; }
-    .stat-num { font-size: 1.8rem; font-weight: 900; }
+
+    /* ══ CARDS DASHBOARD ═══════════════════════════════════════════════════════ */
+    .card-base { border-radius:12px; border:none; box-shadow:var(--shadow); }
+    .postou    { border-left:5px solid #28a745; }
+    .nao-postou { border-left:5px solid #dc3545; }
+    .stat-box  { text-align:center; padding:12px; border-radius:10px; }
+    .stat-num  { font-size:1.8rem; font-weight:900; }
     .alerta-badge { position:relative; }
     .alerta-count { position:absolute; top:-6px; right:-10px; background:#ff4444; color:#fff; border-radius:50%; width:20px; height:20px; font-size:11px; display:flex; align-items:center; justify-content:center; font-weight:bold; }
-    table th { background: #f8d7d7; }
-    .progresso-bar { height: 8px; border-radius: 4px; }
-    .rank-item { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:7px; margin-bottom:4px; background:#fafafa; border:1px solid #f0f0f0; }
-    .rank-item:hover { background:#f5f5f5; }
-    .rank-num { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.75rem; font-weight:800; flex-shrink:0; }
+    .progresso-bar { height:8px; border-radius:4px; }
+    .rank-item { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:7px; margin-bottom:4px; background:var(--bg-card-alt); border:1px solid var(--border); }
+    .rank-item:hover { opacity:.85; }
+    .rank-num  { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.75rem; font-weight:800; flex-shrink:0; }
     .rank-1 { background:#ffd700; color:#333; }
     .rank-2 { background:#c0c0c0; color:#333; }
     .rank-3 { background:#cd7f32; color:#fff; }
     .rank-n { background:#e9ecef; color:#555; }
-    .pending-item { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:7px; margin-bottom:4px; background:#fff5f5; border:1px solid #fdd; }
-    .card-base-v2 { border-radius:10px; border:none; box-shadow:0 2px 8px rgba(0,0,0,.07); overflow:hidden; }
+    .pending-item { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:7px; margin-bottom:4px; background:var(--bg-card-alt); border:1px solid var(--border); }
+    .card-base-v2 { border-radius:10px; border:none; box-shadow:var(--shadow); overflow:hidden; background:var(--bg-card); }
     .card-base-v2 .cb-header { padding:10px 14px; display:flex; justify-content:space-between; align-items:center; }
     .cb-postou   { border-left:4px solid #28a745; }
     .cb-pendente { border-left:4px solid #dc3545; }
-    #toastAlerta { position: fixed; top: 70px; right: 20px; z-index: 9999; min-width: 320px; }
+    #toastAlerta { position:fixed; top:70px; right:20px; z-index:9999; min-width:320px; }
+
+    /* ══ SELETOR DE TEMA ═══════════════════════════════════════════════════════ */
+    .tema-btn { width:20px; height:20px; border-radius:50%; border:2px solid rgba(255,255,255,.4); cursor:pointer; transition:transform .15s,border-color .15s; flex-shrink:0; }
+    .tema-btn:hover { transform:scale(1.15); border-color:rgba(255,255,255,.9); }
+    .tema-btn.ativo  { border-color:#fff; transform:scale(1.2); box-shadow:0 0 0 2px rgba(255,255,255,.5); }
+
+    /* ══ KPI CARDS EXECUTIVOS ══════════════════════════════════════════════════ */
+    .exec-kpi { border-radius:14px; padding:18px; transition:transform .2s,box-shadow .2s; cursor:default; }
+    .exec-kpi:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,.15) !important; }
+    .exec-kpi .kpi-label { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.6px; opacity:.7; }
+    .exec-kpi .kpi-num { font-size:2.2rem; font-weight:900; line-height:1.1; margin:6px 0 4px; }
+    .exec-kpi .kpi-icon { font-size:1.5rem; opacity:.35; }
+
+    /* ══ PAINEL EXECUTIVO AVANÇADO ═════════════════════════════════════════════ */
+    .exec-kpi-card { border-radius:12px; border:none; box-shadow:var(--shadow); transition:box-shadow .2s; }
+    .exec-kpi-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.12); }
+    .kpi-trend-up   { color:#dc3545; font-size:.72rem; font-weight:700; }
+    .kpi-trend-down { color:#28a745; font-size:.72rem; font-weight:700; }
+    .kpi-trend-flat { color:#6c757d; font-size:.72rem; font-weight:700; }
+    .sla-bar-wrap  { height:10px; background:var(--border); border-radius:5px; overflow:hidden; }
+    .sla-bar-inner { height:100%; border-radius:5px; transition:width .6s ease; }
+    .reinc-row { display:flex; align-items:center; gap:8px; padding:7px 12px; border-bottom:1px solid var(--border); }
+    .reinc-row:last-child { border-bottom:none; }
+    .reinc-rank { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:800; flex-shrink:0; }
+    .chart-container { position:relative; }
+    .exec-section-header { font-weight:700; font-size:.8rem; text-transform:uppercase; letter-spacing:.5px; color:var(--text-2); display:flex; align-items:center; gap:6px; }
 
     /* ── Painel Executivo Avançado ───────────────── */
     .exec-kpi-card { border-radius:12px; border:none; box-shadow:0 2px 10px rgba(0,0,0,.07); transition:box-shadow .2s; }
@@ -61,6 +198,12 @@
 <nav class="navbar navbar-dark px-3 py-2">
   <span class="navbar-brand"><i class="bi bi-bar-chart-fill me-2"></i>Coca-Cola F1 – Diretoria</span>
   <div class="d-flex align-items-center gap-3">
+    <!-- Seletor de tema -->
+    <div class="d-flex align-items-center gap-1" title="Escolher tema visual">
+      <button class="tema-btn ativo" id="tema-light"   onclick="setTema('')"        title="Light Premium"     style="background:#f1f5f9"></button>
+      <button class="tema-btn"       id="tema-dark"    onclick="setTema('dark')"    title="Dark Executive"    style="background:#1e293b"></button>
+      <button class="tema-btn"       id="tema-red-dark" onclick="setTema('red-dark')" title="Coca-Cola Dark"  style="background:#6b0000"></button>
+    </div>
     <div class="position-relative alerta-badge" id="btnAlertas" onclick="showTab('alertas', this)" style="cursor:pointer">
       <i class="bi bi-bell-fill text-white fs-5"></i>
       <span class="alerta-count d-none" id="qtdAlertas">0</span>
@@ -242,12 +385,51 @@
 
     <!-- ── PAINEL EXECUTIVO ── -->
     <div id="painelExecutivo" class="mb-4">
-      <!-- Cards topo -->
-      <div class="row g-2 mb-3" id="execCards">
-        <div class="col-6 col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body py-2 px-3"><div class="text-muted small">📋 Relatórios</div><div class="fs-4 fw-bold" id="ex-total-rel">—</div><div class="d-flex gap-2 mt-1"><span class="badge bg-success" id="ex-finalizados">0 finalizados</span><span class="badge bg-warning text-dark" id="ex-andamento">0 em andamento</span></div></div></div></div>
-        <div class="col-6 col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body py-2 px-3"><div class="text-muted small">🚛 Rotas / Ocorrências</div><div class="fs-4 fw-bold" id="ex-total-rotas">—</div><div class="text-danger small" id="ex-ocorrencias"></div></div></div></div>
-        <div class="col-6 col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body py-2 px-3"><div class="text-muted small">💰 Total F1 (descontos)</div><div class="fs-4 fw-bold text-danger" id="ex-total-valor">—</div><div class="text-muted small" id="ex-valor-sub"></div></div></div></div>
-        <div class="col-6 col-md-3"><div class="card border-0 shadow-sm h-100"><div class="card-body py-2 px-3"><div class="text-muted small">⏱️ Tempo Médio Resolução</div><div class="fs-4 fw-bold" id="ex-tempo">—</div><div class="text-muted small">horas (relatórios finalizados)</div></div></div></div>
+      <!-- Cards KPI executivos -->
+      <div class="row g-3 mb-4" id="execCards">
+        <div class="col-6 col-md-3">
+          <div class="exec-kpi h-100" style="background:var(--kpi-1-bg);box-shadow:var(--shadow)">
+            <div class="d-flex justify-content-between align-items-start">
+              <span class="kpi-label" style="color:var(--kpi-1-c)">Relatórios</span>
+              <i class="bi bi-file-earmark-bar-graph kpi-icon" style="color:var(--kpi-1-c)"></i>
+            </div>
+            <div class="kpi-num" id="ex-total-rel" style="color:var(--kpi-1-c)">—</div>
+            <div class="d-flex gap-2 flex-wrap">
+              <span class="badge bg-success" id="ex-finalizados">0 finalizados</span>
+              <span class="badge bg-warning text-dark" id="ex-andamento">0 em andamento</span>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="exec-kpi h-100" style="background:var(--kpi-2-bg);box-shadow:var(--shadow)">
+            <div class="d-flex justify-content-between align-items-start">
+              <span class="kpi-label" style="color:var(--kpi-2-c)">Rotas / Ocorrências</span>
+              <i class="bi bi-truck kpi-icon" style="color:var(--kpi-2-c)"></i>
+            </div>
+            <div class="kpi-num" id="ex-total-rotas" style="color:var(--kpi-2-c)">—</div>
+            <div class="small fw-semibold text-danger" id="ex-ocorrencias"></div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="exec-kpi h-100" style="background:var(--kpi-3-bg);box-shadow:var(--shadow)">
+            <div class="d-flex justify-content-between align-items-start">
+              <span class="kpi-label" style="color:var(--kpi-3-c)">Total F1 (descontos)</span>
+              <i class="bi bi-cash-stack kpi-icon" style="color:var(--kpi-3-c)"></i>
+            </div>
+            <div class="kpi-num" id="ex-total-valor" style="color:var(--kpi-3-c);font-size:1.6rem">—</div>
+            <div class="small fw-semibold opacity-75" id="ex-valor-sub" style="color:var(--kpi-3-c)"></div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="exec-kpi h-100" style="background:var(--kpi-4-bg);box-shadow:var(--shadow)">
+            <div class="d-flex justify-content-between align-items-start">
+              <span class="kpi-label" style="color:var(--kpi-4-c)">Tempo Médio Resolução</span>
+              <i class="bi bi-hourglass-split kpi-icon" style="color:var(--kpi-4-c)"></i>
+            </div>
+            <div class="kpi-num" id="ex-tempo" style="color:var(--kpi-4-c)">—</div>
+            <div class="small opacity-60" style="color:var(--kpi-4-c);font-size:.72rem">horas (relatórios finalizados)</div>
+          </div>
+        </div>
       </div>
 
       <!-- Breakdown descontos -->
@@ -729,6 +911,9 @@ let isCeo = false;
   const ha30   = new Date(); ha30.setDate(ha30.getDate() - 30);
   document.getElementById('filtroDataAte').value = hoje30.toISOString().slice(0,10);
   document.getElementById('filtroDataDe').value  = ha30.toISOString().slice(0,10);
+
+  // Aplicar tema salvo
+  setTema(localStorage.getItem('cc_tema') || '');
 
   await Promise.all([carregarDashboard(), carregarRelatorios(), carregarBases(), carregarAlertas()]);
 
@@ -2020,6 +2205,48 @@ async function logout() {
   await fetch('/api/auth/logout', { method: 'POST' });
   window.location.href = '/';
 }
+
+// ── Sistema de Temas ──────────────────────────────────────────────────────────
+function setTema(tema) {
+  document.documentElement.setAttribute('data-theme', tema);
+  localStorage.setItem('cc_tema', tema);
+
+  // Atualizar botões de seleção
+  ['', 'dark', 'red-dark'].forEach(t => {
+    const id  = t === '' ? 'tema-light' : `tema-${t}`;
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('ativo', t === tema);
+  });
+
+  // Atualizar cores dos gráficos
+  atualizarCoresGraficos(tema);
+}
+
+function atualizarCoresGraficos(tema) {
+  const isDark   = tema === 'dark' || tema === 'red-dark';
+  const grid     = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.06)';
+  const ticks    = isDark ? '#94a3b8' : '#666';
+  const bg       = isDark ? 'transparent' : '#fff';
+
+  [_chartMensal, _chartFinanc].forEach(chart => {
+    if (!chart) return;
+    chart.options.plugins.legend.labels.color = ticks;
+    Object.values(chart.options.scales || {}).forEach(scale => {
+      if (scale.grid)  scale.grid.color = grid;
+      if (scale.ticks) scale.ticks.color = ticks;
+      if (scale.title) scale.title.color = ticks;
+    });
+    chart.update('none');
+  });
+}
+
+// Restaurar tema ao carregar
+(function() {
+  const t = localStorage.getItem('cc_tema') || '';
+  document.documentElement.setAttribute('data-theme', t);
+  // Sincronizar botões após DOM estar pronto
+  window.addEventListener('DOMContentLoaded', () => setTema(t));
+})();
 </script>
 <script src="/js/dashboard.js"></script>
 </body>
