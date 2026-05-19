@@ -483,6 +483,102 @@ router.get('/stats/executivo', auth, async (req, res) => {
   } catch (err) { console.error('[stats/executivo]', err.message); res.status(500).json({ erro: err.message }); }
 });
 
+// ── Stats mensais (evolução mês a mês) ───────────────────────────────────────
+router.get('/stats/mensal', auth, async (req, res) => {
+  if (!req.session.isAdmin && !req.session.isCoordinador)
+    return res.status(403).json({ erro: 'Sem permissão.' });
+  try {
+    const { base_id, meses = 12 } = req.query;
+    const params = [];
+    let where = "WHERE (r.ativo IS NULL OR r.ativo = 1)";
+
+    if (req.session.isCoordinador) {
+      const bases = req.session.coordenadorBases || [];
+      if (bases.length === 0) return res.json([]);
+      params.push(bases);
+      where += ` AND r.base_id = ANY($${params.length}::int[])`;
+    }
+    if (base_id) { params.push(base_id); where += ` AND r.base_id = $${params.length}`; }
+
+    const mesesNum = Math.min(Math.max(parseInt(meses) || 12, 1), 24);
+    const dataInicio = new Date();
+    dataInicio.setMonth(dataInicio.getMonth() - mesesNum + 1);
+    dataInicio.setDate(1);
+    params.push(dataInicio.toISOString().slice(0, 10));
+    where += ` AND r.data_referencia >= $${params.length}`;
+
+    const rows = await db.pool.query(`
+      SELECT
+        SUBSTRING(r.data_referencia, 1, 7)                                                AS mes,
+        COUNT(DISTINCT r.id)                                                              AS total_relatorios,
+        COUNT(DISTINCT CASE WHEN r.status = 'finalizado'  THEN r.id END)                AS finalizados,
+        COUNT(DISTINCT CASE WHEN r.status != 'finalizado' THEN r.id END)                AS em_andamento,
+        COUNT(rt.id)                                                                     AS total_rotas,
+        COUNT(CASE WHEN rt.status_desconto NOT IN ('nenhum','abonar') THEN 1 END)       AS total_ocorrencias,
+        COALESCE(SUM(rt.valor_desconto::numeric), 0)                                     AS valor_total,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'motorista' THEN rt.valor_desconto::numeric END), 0) AS valor_motorista,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'equipe'    THEN rt.valor_desconto::numeric END), 0) AS valor_equipe,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'pago'      THEN rt.valor_desconto::numeric END), 0) AS valor_pago,
+        ROUND(AVG(CASE WHEN r.status = 'finalizado' AND r.finalizado_em IS NOT NULL
+          THEN EXTRACT(EPOCH FROM (r.finalizado_em - r.postado_em))/3600 END)::numeric, 1) AS tempo_medio_horas
+      FROM relatorios r
+      LEFT JOIN rotas rt ON rt.relatorio_id = r.id
+      ${where}
+      GROUP BY mes
+      ORDER BY mes ASC
+    `, params);
+
+    res.json(rows.rows);
+  } catch (err) {
+    console.error('[stats/mensal]', err.message);
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ── Top motoristas reincidentes ───────────────────────────────────────────────
+router.get('/stats/reincidentes', auth, async (req, res) => {
+  if (!req.session.isAdmin && !req.session.isCoordinador)
+    return res.status(403).json({ erro: 'Sem permissão.' });
+  try {
+    const { base_id, data_de, data_ate } = req.query;
+    const params = [];
+    let where = "WHERE (r.ativo IS NULL OR r.ativo = 1)";
+
+    if (req.session.isCoordinador) {
+      const bases = req.session.coordenadorBases || [];
+      if (bases.length === 0) return res.json({ motoristas: [] });
+      params.push(bases);
+      where += ` AND r.base_id = ANY($${params.length}::int[])`;
+    }
+    if (base_id) { params.push(base_id); where += ` AND r.base_id = $${params.length}`; }
+    if (data_de) { params.push(data_de); where += ` AND r.data_referencia >= $${params.length}`; }
+    if (data_ate) { params.push(data_ate); where += ` AND r.data_referencia <= $${params.length}`; }
+
+    const motoristas = await db.pool.query(`
+      SELECT
+        f.id, f.nome,
+        COUNT(CASE WHEN rt.status_desconto = 'motorista' THEN 1 END)               AS ocorrencias_motorista,
+        COUNT(CASE WHEN rt.status_desconto NOT IN ('nenhum','abonar') THEN 1 END)  AS total_ocorrencias,
+        COUNT(rt.id)                                                               AS total_rotas,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'motorista'
+                          THEN rt.valor_desconto::numeric END), 0)                AS valor_descontado
+      FROM rotas rt
+      JOIN relatorios r ON r.id = rt.relatorio_id
+      JOIN funcionarios f ON f.id = rt.motorista_id
+      ${where}
+      GROUP BY f.id, f.nome
+      HAVING COUNT(CASE WHEN rt.status_desconto NOT IN ('nenhum','abonar') THEN 1 END) > 0
+      ORDER BY total_ocorrencias DESC
+      LIMIT 10
+    `, params);
+
+    res.json({ motoristas: motoristas.rows });
+  } catch (err) {
+    console.error('[stats/reincidentes]', err.message);
+    res.status(500).json({ erro: err.message });
+  }
+});
+
 // ── Alertas ───────────────────────────────────────────────────────────────────
 router.get('/alertas/pendentes', auth, async (req, res) => {
   if (!req.session.isAdmin) return res.status(403).json({ erro: 'Sem permissão.' });
