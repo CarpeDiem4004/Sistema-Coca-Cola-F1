@@ -271,6 +271,35 @@
       </div>
     </div>
 
+    <!-- ── PAINEL TENDÊNCIA MENSAL ── -->
+    <div id="painelMensalGeral" class="mb-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header py-2 fw-semibold small bg-light d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-bar-chart-line me-1 text-primary"></i>Tendência Mensal — <span id="mensalGeralTitulo">Todas as Bases</span></span>
+          <span class="badge bg-light text-muted border" id="mensalGeralPeriodo"></span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive" style="max-height:320px;overflow-y:auto">
+            <table class="table table-sm table-hover mb-0" id="tblMensalGeral">
+              <thead class="table-light sticky-top"><tr>
+                <th style="min-width:80px">Mês</th>
+                <th class="text-center">Relatórios</th>
+                <th class="text-center">✅ Finalizados</th>
+                <th class="text-center">🔄 Em Andamento</th>
+                <th class="text-center">Taxa Final.</th>
+                <th class="text-center">Rotas</th>
+                <th class="text-center">Ocorrências</th>
+                <th class="text-end" style="min-width:130px">Total F1</th>
+                <th style="min-width:120px">Progresso F1</th>
+                <th class="text-end">⏱️ Tempo Méd.</th>
+              </tr></thead>
+              <tbody id="tbMensalGeralBody"><tr><td colspan="10" class="text-center text-muted p-3">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Tabela -->
     <div class="table-responsive">
       <table class="table table-bordered table-hover align-middle">
@@ -870,6 +899,89 @@ async function carregarExecutivo(baseId, dataDe, dataAte) {
   } catch (err) { console.error('carregarExecutivo:', err); }
 }
 
+// ── Tendência Mensal ──────────────────────────────────────────────────────────
+async function carregarMensal(baseId, dataDe, dataAte) {
+  try {
+    let url = '/api/relatorios/stats/mensal?';
+    if (baseId)  url += `base_id=${baseId}&`;
+    if (dataDe)  url += `data_de=${dataDe}&`;
+    if (dataAte) url += `data_ate=${dataAte}&`;
+
+    const meses = await fetch(url).then(r => r.json());
+    if (!Array.isArray(meses)) return;
+
+    // Atualiza título e período
+    const nomeBase = baseId
+      ? (document.getElementById('filtroBase').options[document.getElementById('filtroBase').selectedIndex]?.text || 'Base')
+      : 'Todas as Bases';
+    document.getElementById('mensalGeralTitulo').textContent = nomeBase;
+
+    if (meses.length > 0) {
+      const primeiro = meses[meses.length - 1].mes_label;
+      const ultimo   = meses[0].mes_label;
+      document.getElementById('mensalGeralPeriodo').textContent =
+        primeiro === ultimo ? primeiro : `${primeiro} → ${ultimo}`;
+    } else {
+      document.getElementById('mensalGeralPeriodo').textContent = '';
+    }
+
+    const tb = document.getElementById('tbMensalGeralBody');
+    if (meses.length === 0) {
+      tb.innerHTML = '<tr><td colspan="10" class="text-center text-muted p-3">Nenhum dado no período</td></tr>';
+      return;
+    }
+
+    // Valor máximo para escalar as barras de progresso
+    const maxValor = Math.max(...meses.map(m => +m.total_valor || 0), 1);
+
+    tb.innerHTML = meses.map((m, i) => {
+      const anterior    = meses[i + 1];
+      const totalRel    = +m.total_relatorios || 0;
+      const finalizados = +m.finalizados || 0;
+      const emAndamento = +m.em_andamento || 0;
+      const ocorr       = +m.ocorrencias || 0;
+      const valor       = +m.total_valor || 0;
+      const taxaFinal   = totalRel > 0 ? Math.round((finalizados / totalRel) * 100) : 0;
+      const pct         = Math.round((valor / maxValor) * 100);
+
+      // Indicadores de tendência (vs mês anterior)
+      function tendencia(atual, ant) {
+        if (!ant) return '';
+        if (+atual > +ant) return '<span class="text-danger ms-1" title="Subiu vs mês anterior">▲</span>';
+        if (+atual < +ant) return '<span class="text-success ms-1" title="Caiu vs mês anterior">▼</span>';
+        return '<span class="text-muted ms-1">—</span>';
+      }
+
+      const corTaxa = taxaFinal >= 80 ? 'success' : taxaFinal >= 50 ? 'warning' : 'danger';
+      const corOcorr = ocorr === 0 ? 'bg-light text-dark border' : ocorr <= 5 ? 'bg-warning text-dark' : 'bg-danger text-white';
+
+      return `<tr>
+        <td class="fw-semibold">${m.mes_label}</td>
+        <td class="text-center">${totalRel}${tendencia(totalRel, anterior?.total_relatorios)}</td>
+        <td class="text-center"><span class="badge bg-success">${finalizados}</span></td>
+        <td class="text-center"><span class="badge bg-warning text-dark">${emAndamento}</span></td>
+        <td class="text-center">
+          <span class="badge bg-${corTaxa}">${taxaFinal}%</span>
+        </td>
+        <td class="text-center">${+m.total_rotas || 0}</td>
+        <td class="text-center"><span class="badge ${corOcorr}">${ocorr}</span>${tendencia(ocorr, anterior?.ocorrencias)}</td>
+        <td class="text-end fw-semibold ${valor > 0 ? 'text-danger' : 'text-muted'}">
+          ${valor > 0 ? fmtBRL(valor) : '—'}${tendencia(valor, anterior?.total_valor)}
+        </td>
+        <td style="min-width:120px">
+          <div class="progress" style="height:14px;background:#f0f0f0">
+            <div class="progress-bar bg-danger" role="progressbar" style="width:${pct}%" title="${fmtBRL(valor)}"></div>
+          </div>
+          <div class="text-muted" style="font-size:10px">
+            Motor: ${+m.val_motorista > 0 ? fmtBRL(m.val_motorista) : '—'} · Equipe: ${+m.val_equipe > 0 ? fmtBRL(m.val_equipe) : '—'}
+          </div>
+        </td>
+        <td class="text-end small">${m.tempo_medio_horas ? `${m.tempo_medio_horas}h` : '—'}</td>
+      </tr>`;
+    }).join('');
+  } catch (err) { console.error('carregarMensal:', err); }
+}
+
 async function carregarDetalhesF1(baseId, dataDe, dataAte, status, incluirInativos) {
   const painel = document.getElementById('painelDetalhesF1');
   if (!baseId) { painel.classList.add('d-none'); return; }
@@ -919,7 +1031,8 @@ async function carregarRelatorios() {
   const dataAte = document.getElementById('filtroDataAte')?.value || '';
   const status  = document.getElementById('filtroStatus')?.value  || '';
 
-  carregarExecutivo(baseId, dataDe, dataAte); // painel executivo usa os mesmos filtros
+  carregarExecutivo(baseId, dataDe, dataAte);
+  carregarMensal(baseId, dataDe, dataAte);
 
   const incluirInativos = document.getElementById('filtroInativos')?.checked;
 

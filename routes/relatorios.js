@@ -483,6 +483,52 @@ router.get('/stats/executivo', auth, async (req, res) => {
   } catch (err) { console.error('[stats/executivo]', err.message); res.status(500).json({ erro: err.message }); }
 });
 
+// ── Tendência Mensal ──────────────────────────────────────────────────────────
+router.get('/stats/mensal', auth, async (req, res) => {
+  if (!req.session.isAdmin && !req.session.isCoordinador)
+    return res.status(403).json({ erro: 'Sem permissão.' });
+  try {
+    const { base_id, data_de, data_ate } = req.query;
+    const params = [];
+    let where = 'WHERE (r.ativo IS NULL OR r.ativo = 1)';
+
+    if (req.session.isCoordinador) {
+      const bases = req.session.coordenadorBases || [];
+      if (bases.length === 0) return res.json([]);
+      params.push(bases);
+      where += ` AND r.base_id = ANY($${params.length}::int[])`;
+    }
+    if (base_id) { params.push(base_id); where += ` AND r.base_id = $${params.length}`; }
+    if (data_de) { params.push(data_de); where += ` AND r.data_referencia >= $${params.length}`; }
+    if (data_ate) { params.push(data_ate); where += ` AND r.data_referencia <= $${params.length}`; }
+
+    const rows = await db.pool.query(`
+      SELECT
+        TO_CHAR(r.data_referencia::date, 'YYYY-MM')   AS mes,
+        TO_CHAR(r.data_referencia::date, 'Mon/YY')    AS mes_label,
+        COUNT(DISTINCT r.id)                                                                    AS total_relatorios,
+        COUNT(DISTINCT CASE WHEN r.status = 'finalizado'  THEN r.id END)                      AS finalizados,
+        COUNT(DISTINCT CASE WHEN r.status != 'finalizado' THEN r.id END)                      AS em_andamento,
+        COUNT(rt.id)                                                                            AS total_rotas,
+        COUNT(CASE WHEN rt.status_desconto NOT IN ('nenhum','abonar') THEN 1 END)             AS ocorrencias,
+        COALESCE(SUM(rt.valor_desconto::numeric), 0)                                           AS total_valor,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'motorista' THEN rt.valor_desconto::numeric END), 0) AS val_motorista,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'equipe'    THEN rt.valor_desconto::numeric END), 0) AS val_equipe,
+        COALESCE(SUM(CASE WHEN rt.status_desconto = 'pago'      THEN rt.valor_desconto::numeric END), 0) AS val_pago,
+        ROUND(AVG(CASE WHEN r.status = 'finalizado' AND r.finalizado_em IS NOT NULL
+          THEN EXTRACT(EPOCH FROM (r.finalizado_em - r.postado_em))/3600 END)::numeric, 1)    AS tempo_medio_horas
+      FROM relatorios r
+      LEFT JOIN rotas rt ON rt.relatorio_id = r.id
+      ${where}
+      GROUP BY TO_CHAR(r.data_referencia::date, 'YYYY-MM'), TO_CHAR(r.data_referencia::date, 'Mon/YY')
+      ORDER BY mes DESC
+      LIMIT 12
+    `, params);
+
+    res.json(rows.rows);
+  } catch (err) { console.error('[stats/mensal]', err.message); res.status(500).json({ erro: err.message }); }
+});
+
 // ── Alertas ───────────────────────────────────────────────────────────────────
 router.get('/alertas/pendentes', auth, async (req, res) => {
   if (!req.session.isAdmin) return res.status(403).json({ erro: 'Sem permissão.' });
